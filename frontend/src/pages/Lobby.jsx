@@ -17,21 +17,53 @@ function Lobby() {
   const [ready, setReadyState] = useState(false);
   const [error, setError] = useState("");
 
+  // =====================================
+  // GO TO GAME
+  // =====================================
+
+  const goToGame = () => {
+    navigate(`/game/${roomCode}`, {
+      replace: true,
+    });
+  };
+
+  // =====================================
+  // LOAD MATCH
+  // =====================================
+
   const loadMatch = async () => {
     try {
       const result = await getMatch(roomCode);
-      setMatch(result.data);
+
+      const matchData = result.data;
+
+      setMatch(matchData);
+
+      // If game has already started,
+      // go directly to the game.
+      if (matchData.status === "PLAYING") {
+        goToGame();
+        return;
+      }
+
+      return matchData;
     } catch (err) {
       console.error(err);
       setError(err.message);
+      return null;
     }
   };
+
+  // =====================================
+  // INITIALIZE LOBBY
+  // =====================================
 
   useEffect(() => {
     let mounted = true;
 
     const init = async () => {
       try {
+        // Get current user
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -41,17 +73,43 @@ function Lobby() {
           return;
         }
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setUser(user);
 
+        // Load match
         const result = await getMatch(roomCode);
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
-        setMatch(result.data);
+        const matchData = result.data;
 
-        const currentPlayer = result.data.players?.find(
+        // Save match
+        setMatch(matchData);
+
+        // ---------------------------------
+        // IMPORTANT
+        // If match already started,
+        // go directly to game.
+        // ---------------------------------
+
+        if (matchData.status === "PLAYING") {
+          navigate(`/game/${roomCode}`, {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // ---------------------------------
+        // Find current player
+        // ---------------------------------
+
+        const currentPlayer = matchData.players?.find(
           (player) => player.user_id === user.id,
         );
 
@@ -59,27 +117,57 @@ function Lobby() {
           setReadyState(Boolean(currentPlayer.ready));
         }
 
+        // ---------------------------------
         // Connect Socket.io
-        socket.connect();
+        // ---------------------------------
+
+        if (!socket.connected) {
+          socket.connect();
+        }
+
+        // ---------------------------------
+        // Join room
+        // ---------------------------------
 
         socket.emit("join-room", {
           roomCode,
           userId: user.id,
         });
 
-        // Player joined
+        // ---------------------------------
+        // PLAYER JOINED
+        // ---------------------------------
+
         socket.on("player-joined", async () => {
-          await loadMatch();
+          const updatedMatch = await loadMatch();
+
+          if (updatedMatch?.status === "PLAYING") {
+            goToGame();
+          }
         });
 
-        // Player ready
+        // ---------------------------------
+        // PLAYER READY
+        // ---------------------------------
+
         socket.on("player-ready", async () => {
-          await loadMatch();
+          const updatedMatch = await loadMatch();
+
+          if (updatedMatch?.status === "PLAYING") {
+            goToGame();
+          }
         });
 
-        // Another player started the game
-        socket.on("game-started", ({ roomCode }) => {
-          navigate(`/game/${roomCode}`);
+        // ---------------------------------
+        // GAME STARTED
+        // ---------------------------------
+
+        socket.on("game-started", ({ roomCode: startedRoom }) => {
+          console.log("Game started:", startedRoom);
+
+          if (startedRoom === roomCode) {
+            goToGame();
+          }
         });
       } catch (err) {
         console.error(err);
@@ -107,9 +195,15 @@ function Lobby() {
     };
   }, [roomCode, navigate]);
 
+  // =====================================
+  // READY
+  // =====================================
+
   const handleReady = async () => {
     try {
-      if (!user) return;
+      if (!user) {
+        return;
+      }
 
       const newReady = !ready;
 
@@ -130,13 +224,19 @@ function Lobby() {
     }
   };
 
+  // =====================================
+  // START GAME
+  // =====================================
+
   const handleStart = async () => {
     try {
-      if (!user) return;
+      if (!user) {
+        return;
+      }
 
       setError("");
 
-      // Start match on backend
+      // Start match in backend
       await startMatch(roomCode, user.id);
 
       // Notify other players
@@ -144,15 +244,19 @@ function Lobby() {
         roomCode,
       });
 
-      // IMPORTANT:
-      // Host does not receive socket.to(roomCode).emit()
-      // Therefore navigate manually for the host.
-      navigate(`/game/${roomCode}`);
+      // Host does not receive
+      // socket.to(roomCode)
+      // so navigate manually.
+      goToGame();
     } catch (err) {
       console.error(err);
       setError(err.message);
     }
   };
+
+  // =====================================
+  // DATA
+  // =====================================
 
   const isHost = match?.host_id === user?.id;
 
@@ -161,6 +265,10 @@ function Lobby() {
   const allReady =
     players.length > 0 && players.every((player) => player.ready);
 
+  // =====================================
+  // LOADING
+  // =====================================
+
   if (loading) {
     return (
       <div className="lobby-page">
@@ -168,6 +276,10 @@ function Lobby() {
       </div>
     );
   }
+
+  // =====================================
+  // LOBBY
+  // =====================================
 
   return (
     <div className="lobby-page">
@@ -181,6 +293,10 @@ function Lobby() {
         </p>
 
         {error && <div className="error">{error}</div>}
+
+        {/* ================================
+            PLAYERS
+        ================================= */}
 
         <div className="players">
           <h3>
@@ -200,6 +316,10 @@ function Lobby() {
           ))}
         </div>
 
+        {/* ================================
+            WAITING
+        ================================= */}
+
         {match?.status === "WAITING" && (
           <>
             <button onClick={handleReady}>
@@ -214,9 +334,9 @@ function Lobby() {
           </>
         )}
 
-        {match?.status === "PLAYING" && (
-          <div className="game-started">Game has started!</div>
-        )}
+        {/* ================================
+            BACK HOME
+        ================================= */}
 
         <button onClick={() => navigate("/")}>Back Home</button>
       </div>
