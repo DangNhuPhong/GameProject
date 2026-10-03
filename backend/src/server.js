@@ -16,30 +16,9 @@ const io = new Server(server, {
   },
 });
 
-/*
-  Game state theo room
-
-  roomStates = {
-    ABC123: {
-      meat: {
-        state:
-          "available"
-          "held"
-          "cooking"
-          "cooked",
-
-        itemType:
-          "raw-meat"
-          "cooked-meat",
-
-        userId: null,
-
-        x: 160,
-        y: 150
-      }
-    }
-  }
-*/
+// ==========================================
+// GAME STATE
+// ==========================================
 
 const roomStates = {};
 
@@ -50,14 +29,28 @@ function getRoomState(roomCode) {
         state: "available",
         itemType: "raw-meat",
         userId: null,
+
+        // Raw meat starts here
         x: 160,
         y: 150,
+
+        // Cooking information
+        cookingStartedAt: null,
+        cookingDuration: 0,
       },
     };
   }
 
   return roomStates[roomCode];
 }
+
+function emitState(roomCode) {
+  io.to(roomCode).emit("game-state", getRoomState(roomCode));
+}
+
+// ==========================================
+// SOCKET CONNECTION
+// ==========================================
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
@@ -71,24 +64,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    socket.join(roomCode);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    socket.data.roomCode = roomCode;
+    socket.join(normalizedRoomCode);
+
+    socket.data.roomCode = normalizedRoomCode;
     socket.data.userId = userId;
 
-    const state = getRoomState(roomCode);
+    const state = getRoomState(normalizedRoomCode);
 
-    console.log(`User ${userId} joined room ${roomCode}`);
+    console.log(`User ${userId} joined room ${normalizedRoomCode}`);
 
-    // Gửi state hiện tại
+    // Send current game state
+    // to the player who just joined
     socket.emit("game-state", state);
 
     socket.emit("room-joined", {
-      roomCode,
+      roomCode: normalizedRoomCode,
       userId,
     });
 
-    socket.to(roomCode).emit("player-joined", {
+    // Tell other players
+    socket.to(normalizedRoomCode).emit("player-joined", {
       userId,
     });
   });
@@ -102,11 +99,13 @@ io.on("connection", (socket) => {
       return;
     }
 
+    const normalizedRoomCode = String(roomCode).toUpperCase();
+
     console.log(`User ${userId} ready = ${ready}`);
 
-    io.to(roomCode).emit("player-ready", {
+    io.to(normalizedRoomCode).emit("player-ready", {
       userId,
-      ready,
+      ready: Boolean(ready),
     });
   });
 
@@ -119,10 +118,12 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(`Game started in room ${roomCode}`);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    io.to(roomCode).emit("game-started", {
-      roomCode,
+    console.log(`Game started in room ${normalizedRoomCode}`);
+
+    io.to(normalizedRoomCode).emit("game-started", {
+      roomCode: normalizedRoomCode,
     });
   });
 
@@ -140,7 +141,9 @@ io.on("connection", (socket) => {
       return;
     }
 
-    socket.to(roomCode).emit("player-position", {
+    const normalizedRoomCode = String(roomCode).toUpperCase();
+
+    socket.to(normalizedRoomCode).emit("player-position", {
       userId,
       x,
       y,
@@ -156,9 +159,11 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const state = getRoomState(roomCode);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    // Chỉ pick raw meat
+    const state = getRoomState(normalizedRoomCode);
+
+    // Only raw meat can be picked
     if (
       state.meat.state !== "available" ||
       state.meat.itemType !== "raw-meat"
@@ -167,12 +172,14 @@ io.on("connection", (socket) => {
     }
 
     state.meat.state = "held";
-
     state.meat.userId = userId;
 
-    console.log(`${userId} picked raw meat in ${roomCode}`);
+    state.meat.cookingStartedAt = null;
+    state.meat.cookingDuration = 0;
 
-    io.to(roomCode).emit("meat-picked", {
+    console.log(`${userId} picked raw meat in ${normalizedRoomCode}`);
+
+    io.to(normalizedRoomCode).emit("meat-picked", {
       userId,
       itemType: "raw-meat",
     });
@@ -187,39 +194,31 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const state = getRoomState(roomCode);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    // Người drop phải là người
-    // đang giữ meat
+    const state = getRoomState(normalizedRoomCode);
+
+    // Only the player holding the meat
+    // can drop it
     if (state.meat.state !== "held" || state.meat.userId !== userId) {
       return;
     }
 
-    /*
-        QUAN TRỌNG:
-
-        Không reset itemType.
-
-        Nếu đang cầm raw-meat:
-          raw-meat -> available
-
-        Nếu đang cầm cooked-meat:
-          cooked-meat -> available
-      */
-
     const itemType = state.meat.itemType;
 
     state.meat.state = "available";
-
     state.meat.userId = null;
 
     state.meat.x = typeof x === "number" ? x : state.meat.x;
 
     state.meat.y = typeof y === "number" ? y : state.meat.y;
 
-    console.log(`${userId} dropped ${itemType} in ${roomCode}`);
+    state.meat.cookingStartedAt = null;
+    state.meat.cookingDuration = 0;
 
-    io.to(roomCode).emit("meat-dropped", {
+    console.log(`${userId} dropped ${itemType} in ${normalizedRoomCode}`);
+
+    io.to(normalizedRoomCode).emit("meat-dropped", {
       userId,
       itemType,
       x: state.meat.x,
@@ -236,9 +235,11 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const state = getRoomState(roomCode);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    // Phải đang cầm raw meat
+    const state = getRoomState(normalizedRoomCode);
+
+    // Must be holding raw meat
     if (
       state.meat.state !== "held" ||
       state.meat.userId !== userId ||
@@ -247,35 +248,58 @@ io.on("connection", (socket) => {
       return;
     }
 
-    state.meat.state = "cooking";
+    const duration = 7000;
 
+    state.meat.state = "cooking";
     state.meat.userId = null;
 
-    console.log(`${userId} started cooking`);
+    // Grill position
+    state.meat.x = 450;
+    state.meat.y = 150;
 
-    io.to(roomCode).emit("cooking-started", {
+    state.meat.cookingStartedAt = Date.now();
+
+    state.meat.cookingDuration = duration;
+
+    console.log(`${userId} started cooking in ${normalizedRoomCode}`);
+
+    io.to(normalizedRoomCode).emit("cooking-started", {
       userId,
-      duration: 7000,
+      duration,
     });
 
     setTimeout(() => {
-      const currentState = getRoomState(roomCode);
+      const currentState = getRoomState(normalizedRoomCode);
 
-      // Chỉ finish nếu vẫn cooking
-      if (currentState.meat.state === "cooking") {
-        currentState.meat.state = "cooked";
-
-        currentState.meat.itemType = "cooked-meat";
-
-        currentState.meat.userId = null;
-
-        console.log(`Cooking finished in ${roomCode}`);
-
-        io.to(roomCode).emit("cooking-finished", {
-          userId,
-        });
+      // Only finish if still cooking
+      if (
+        currentState.meat.state !== "cooking" ||
+        currentState.meat.cookingStartedAt === null
+      ) {
+        return;
       }
-    }, 7000);
+
+      currentState.meat.state = "cooked";
+
+      currentState.meat.itemType = "cooked-meat";
+
+      currentState.meat.userId = null;
+
+      currentState.meat.x = 450;
+      currentState.meat.y = 150;
+
+      currentState.meat.cookingStartedAt = null;
+
+      currentState.meat.cookingDuration = 0;
+
+      console.log(`Cooking finished in ${normalizedRoomCode}`);
+
+      io.to(normalizedRoomCode).emit("cooking-finished", {
+        userId,
+        x: currentState.meat.x,
+        y: currentState.meat.y,
+      });
+    }, duration);
   });
 
   // ==========================================
@@ -287,16 +311,15 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const state = getRoomState(roomCode);
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    // Phải là cooked meat
-    if (
-      state.meat.state !== "cooked" &&
-      !(
-        state.meat.state === "available" &&
-        state.meat.itemType === "cooked-meat"
-      )
-    ) {
+    const state = getRoomState(normalizedRoomCode);
+
+    const isCooked =
+      state.meat.itemType === "cooked-meat" &&
+      (state.meat.state === "cooked" || state.meat.state === "available");
+
+    if (!isCooked) {
       return;
     }
 
@@ -306,9 +329,13 @@ io.on("connection", (socket) => {
 
     state.meat.userId = userId;
 
-    console.log(`${userId} picked cooked meat`);
+    state.meat.cookingStartedAt = null;
 
-    io.to(roomCode).emit("cooked-meat-picked", {
+    state.meat.cookingDuration = 0;
+
+    console.log(`${userId} picked cooked meat in ${normalizedRoomCode}`);
+
+    io.to(normalizedRoomCode).emit("cooked-meat-picked", {
       userId,
       itemType: "cooked-meat",
     });
@@ -319,10 +346,46 @@ io.on("connection", (socket) => {
   // ==========================================
 
   socket.on("disconnect", () => {
+    const roomCode = socket.data.roomCode;
+
+    const userId = socket.data.userId;
+
     console.log("Client disconnected:", socket.id);
+
+    if (!roomCode || !userId) {
+      return;
+    }
+
+    const state = getRoomState(roomCode);
+
+    // If player disconnects while
+    // holding the meat, release it.
+    if (state.meat.state === "held" && state.meat.userId === userId) {
+      const itemType = state.meat.itemType;
+
+      state.meat.state = "available";
+
+      state.meat.userId = null;
+
+      if (itemType === "raw-meat") {
+        state.meat.x = 160;
+        state.meat.y = 150;
+      } else {
+        state.meat.x = 450;
+        state.meat.y = 150;
+      }
+
+      console.log(`Released ${itemType} after disconnect in ${roomCode}`);
+
+      emitState(roomCode);
+    }
   });
 });
 
+// ==========================================
+// START SERVER
+// ==========================================
+
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

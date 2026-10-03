@@ -396,8 +396,6 @@ function Game() {
 
           this.hideMeat();
 
-          // Only the player who picked
-          // actually holds the meat.
           if (userId === user.id) {
             this.heldItem = "meat";
 
@@ -428,13 +426,11 @@ function Game() {
 
           this.heldItem = null;
 
-          // Raw meat
           if (itemType === "raw-meat") {
             this.cookedMeat = false;
             this.meat.setFillStyle(0xc0392b);
           }
 
-          // Cooked meat
           if (itemType === "cooked-meat") {
             this.meatAvailable = false;
             this.cookedMeat = true;
@@ -459,8 +455,6 @@ function Game() {
         socket.on("cooking-started", ({ userId, duration }) => {
           this.startCookingVisual(userId, duration);
 
-          // The player who started
-          // cooking no longer holds meat.
           if (userId === user.id) {
             this.heldItem = null;
 
@@ -499,8 +493,6 @@ function Game() {
 
           this.grillLabel.setText("");
 
-          // Only the player who picked
-          // receives the item.
           if (userId === user.id) {
             this.heldItem = "cooked-meat";
 
@@ -659,8 +651,6 @@ function Game() {
           return;
         }
 
-        // Current server uses
-        // "drop-meat" for the held item.
         socket.emit("drop-meat", {
           roomCode,
           userId: user.id,
@@ -742,9 +732,6 @@ function Game() {
         // MOVEMENT
         // =================================
 
-        // Player can ALWAYS move,
-        // including while cooking.
-
         if (this.keys.W.isDown) {
           this.player.y -= speed;
         }
@@ -822,7 +809,6 @@ function Game() {
               }
             }
 
-            // Show held raw meat
             if (!this.heldMeat) {
               this.heldMeat = this.add.circle(
                 this.player.x,
@@ -850,7 +836,6 @@ function Game() {
               this.dropItem();
             }
 
-            // Show held cooked meat
             if (!this.heldMeat) {
               this.heldMeat = this.add.circle(
                 this.player.x,
@@ -875,15 +860,6 @@ function Game() {
         if (this.cooking) {
           this.interactText.setText("Meat is cooking...");
 
-          // IMPORTANT:
-          // Do NOT return before movement.
-          //
-          // Movement has already happened
-          // at the beginning of update().
-          //
-          // We return here only because
-          // there is currently no other
-          // interaction while cooking.
           return;
         }
 
