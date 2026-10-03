@@ -39,13 +39,6 @@ function Lobby() {
 
       setMatch(matchData);
 
-      // If game has already started,
-      // go directly to the game.
-      if (matchData.status === "PLAYING") {
-        goToGame();
-        return;
-      }
-
       return matchData;
     } catch (err) {
       console.error(err);
@@ -55,7 +48,7 @@ function Lobby() {
   };
 
   // =====================================
-  // INITIALIZE LOBBY
+  // INITIALIZE
   // =====================================
 
   useEffect(() => {
@@ -63,7 +56,10 @@ function Lobby() {
 
     const init = async () => {
       try {
-        // Get current user
+        // ================================
+        // GET USER
+        // ================================
+
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -73,29 +69,25 @@ function Lobby() {
           return;
         }
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         setUser(user);
 
-        // Load match
+        // ================================
+        // LOAD MATCH
+        // ================================
+
         const result = await getMatch(roomCode);
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         const matchData = result.data;
 
-        // Save match
         setMatch(matchData);
 
-        // ---------------------------------
-        // IMPORTANT
-        // If match already started,
-        // go directly to game.
-        // ---------------------------------
+        // ================================
+        // GAME ALREADY STARTED
+        // ================================
 
         if (matchData.status === "PLAYING") {
           navigate(`/game/${roomCode}`, {
@@ -105,9 +97,9 @@ function Lobby() {
           return;
         }
 
-        // ---------------------------------
-        // Find current player
-        // ---------------------------------
+        // ================================
+        // CURRENT PLAYER READY
+        // ================================
 
         const currentPlayer = matchData.players?.find(
           (player) => player.user_id === user.id,
@@ -117,58 +109,101 @@ function Lobby() {
           setReadyState(Boolean(currentPlayer.ready));
         }
 
-        // ---------------------------------
-        // Connect Socket.io
-        // ---------------------------------
+        // ================================
+        // CONNECT SOCKET
+        // ================================
 
         if (!socket.connected) {
           socket.connect();
         }
 
-        // ---------------------------------
-        // Join room
-        // ---------------------------------
+        // ================================
+        // JOIN ROOM
+        // ================================
 
         socket.emit("join-room", {
           roomCode,
           userId: user.id,
         });
 
-        // ---------------------------------
+        // ================================
         // PLAYER JOINED
-        // ---------------------------------
+        // ================================
 
-        socket.on("player-joined", async () => {
-          const updatedMatch = await loadMatch();
+        const handlePlayerJoined = async () => {
+          console.log("Player joined");
 
-          if (updatedMatch?.status === "PLAYING") {
-            goToGame();
-          }
-        });
+          const updatedMatch = await getMatch(roomCode);
 
-        // ---------------------------------
+          if (!mounted) return;
+
+          setMatch(updatedMatch.data);
+        };
+
+        // ================================
         // PLAYER READY
-        // ---------------------------------
+        // ================================
 
-        socket.on("player-ready", async () => {
-          const updatedMatch = await loadMatch();
+        const handlePlayerReady = ({ userId, ready }) => {
+          console.log("Player ready:", userId, ready);
 
-          if (updatedMatch?.status === "PLAYING") {
-            goToGame();
+          setMatch((currentMatch) => {
+            if (!currentMatch) {
+              return currentMatch;
+            }
+
+            const updatedPlayers = currentMatch.players.map((player) => {
+              if (player.user_id === userId) {
+                return {
+                  ...player,
+                  ready,
+                };
+              }
+
+              return player;
+            });
+
+            return {
+              ...currentMatch,
+              players: updatedPlayers,
+            };
+          });
+
+          // Update own ready state
+          if (userId === user.id) {
+            setReadyState(ready);
           }
-        });
+        };
 
-        // ---------------------------------
+        // ================================
         // GAME STARTED
-        // ---------------------------------
+        // ================================
 
-        socket.on("game-started", ({ roomCode: startedRoom }) => {
+        const handleGameStarted = ({ roomCode: startedRoom }) => {
           console.log("Game started:", startedRoom);
 
           if (startedRoom === roomCode) {
             goToGame();
           }
-        });
+        };
+
+        socket.on("player-joined", handlePlayerJoined);
+
+        socket.on("player-ready", handlePlayerReady);
+
+        socket.on("game-started", handleGameStarted);
+
+        // ================================
+        // CLEANUP
+        // ================================
+
+        return () => {
+          socket.off("player-joined", handlePlayerJoined);
+
+          socket.off("player-ready", handlePlayerReady);
+
+          socket.off("game-started", handleGameStarted);
+        };
       } catch (err) {
         console.error(err);
 
@@ -187,37 +222,34 @@ function Lobby() {
     return () => {
       mounted = false;
 
-      socket.off("player-joined");
-      socket.off("player-ready");
-      socket.off("game-started");
-
       socket.disconnect();
     };
   }, [roomCode, navigate]);
 
   // =====================================
-  // READY
+  // READY / NOT READY
   // =====================================
 
   const handleReady = async () => {
     try {
-      if (!user) {
-        return;
-      }
+      if (!user) return;
+
+      setError("");
 
       const newReady = !ready;
 
+      // Update database
       await setReady(roomCode, user.id, newReady);
 
+      // Update own UI immediately
       setReadyState(newReady);
 
+      // Notify all players
       socket.emit("player-ready", {
         roomCode,
         userId: user.id,
         ready: newReady,
       });
-
-      await loadMatch();
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -230,23 +262,18 @@ function Lobby() {
 
   const handleStart = async () => {
     try {
-      if (!user) {
-        return;
-      }
+      if (!user) return;
 
       setError("");
 
-      // Start match in backend
       await startMatch(roomCode, user.id);
 
-      // Notify other players
+      // Notify everyone
       socket.emit("game-started", {
         roomCode,
       });
 
-      // Host does not receive
-      // socket.to(roomCode)
-      // so navigate manually.
+      // Host goes directly
       goToGame();
     } catch (err) {
       console.error(err);
@@ -258,12 +285,12 @@ function Lobby() {
   // DATA
   // =====================================
 
-  const isHost = match?.host_id === user?.id;
-
   const players = match?.players || [];
 
+  const isHost = match?.host_id === user?.id;
+
   const allReady =
-    players.length > 0 && players.every((player) => player.ready);
+    players.length > 0 && players.every((player) => player.ready === true);
 
   // =====================================
   // LOADING
@@ -311,7 +338,9 @@ function Lobby() {
                 {player.user_id === match.host_id && " 👑"}
               </span>
 
-              <span>{player.ready ? "READY" : "NOT READY"}</span>
+              <span className={player.ready ? "ready" : "not-ready"}>
+                {player.ready ? "READY" : "NOT READY"}
+              </span>
             </div>
           ))}
         </div>
@@ -323,7 +352,7 @@ function Lobby() {
         {match?.status === "WAITING" && (
           <>
             <button onClick={handleReady}>
-              {ready ? "Cancel Ready" : "Ready"}
+              {ready ? "Not Ready" : "Ready"}
             </button>
 
             {isHost && (
