@@ -20,7 +20,6 @@ function Lobby() {
   const loadMatch = async () => {
     try {
       const result = await getMatch(roomCode);
-
       setMatch(result.data);
     } catch (err) {
       console.error(err);
@@ -60,6 +59,7 @@ function Lobby() {
           setReadyState(Boolean(currentPlayer.ready));
         }
 
+        // Connect Socket.io
         socket.connect();
 
         socket.emit("join-room", {
@@ -67,14 +67,17 @@ function Lobby() {
           userId: user.id,
         });
 
+        // Player joined
         socket.on("player-joined", async () => {
           await loadMatch();
         });
 
+        // Player ready
         socket.on("player-ready", async () => {
           await loadMatch();
         });
 
+        // Another player started the game
         socket.on("game-started", ({ roomCode }) => {
           navigate(`/game/${roomCode}`);
         });
@@ -131,15 +134,20 @@ function Lobby() {
     try {
       if (!user) return;
 
+      setError("");
+
+      // Start match on backend
       await startMatch(roomCode, user.id);
 
+      // Notify other players
       socket.emit("game-started", {
         roomCode,
       });
 
-      await loadMatch();
-
-      alert("Game started!");
+      // IMPORTANT:
+      // Host does not receive socket.to(roomCode).emit()
+      // Therefore navigate manually for the host.
+      navigate(`/game/${roomCode}`);
     } catch (err) {
       console.error(err);
       setError(err.message);
