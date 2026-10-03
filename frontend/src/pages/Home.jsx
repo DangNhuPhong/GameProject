@@ -40,7 +40,7 @@ function Home() {
   return (
     <div className="page-container">
       <div className="page-card home-card">
-        <h1>Kitchen Panic</h1>
+        <h1>OverNấuĂn</h1>
 
         {profile && (
           <div className="profile-info">
