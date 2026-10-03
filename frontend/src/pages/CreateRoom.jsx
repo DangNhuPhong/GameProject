@@ -1,25 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { joinMatch } from "../services/api";
+import { createMatch } from "../services/api";
 
-function JoinRoom() {
+function CreateRoom() {
   const navigate = useNavigate();
 
-  const [roomCode, setRoomCode] = useState("");
+  const [maxPlayers, setMaxPlayers] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleJoinRoom = async () => {
+  const handleCreateRoom = async () => {
     try {
       setLoading(true);
       setError("");
-
-      const code = roomCode.trim().toUpperCase();
-
-      if (!code) {
-        throw new Error("Please enter a room code");
-      }
 
       const {
         data: { user },
@@ -30,9 +24,15 @@ function JoinRoom() {
         return;
       }
 
-      await joinMatch(code, user.id);
+      const result = await createMatch(user.id, Number(maxPlayers));
 
-      navigate(`/lobby/${code}`);
+      const roomCode = result?.data?.room_code;
+
+      if (!roomCode) {
+        throw new Error("Server did not return a room code");
+      }
+
+      navigate(`/lobby/${roomCode}`);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -43,20 +43,26 @@ function JoinRoom() {
 
   return (
     <div className="page">
-      <h1>Join Room</h1>
+      <h1>Create Room</h1>
 
-      <input
-        type="text"
-        placeholder="Enter room code"
-        value={roomCode}
-        maxLength={6}
-        onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-      />
+      <div>
+        <label>Maximum Players</label>
+
+        <select
+          value={maxPlayers}
+          onChange={(e) => setMaxPlayers(Number(e.target.value))}
+        >
+          <option value={1}>1 Player</option>
+          <option value={2}>2 Players</option>
+          <option value={3}>3 Players</option>
+          <option value={4}>4 Players</option>
+        </select>
+      </div>
 
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <button onClick={handleJoinRoom} disabled={loading}>
-        {loading ? "Joining..." : "Join Room"}
+      <button onClick={handleCreateRoom} disabled={loading}>
+        {loading ? "Creating..." : "Create Room"}
       </button>
 
       <button onClick={() => navigate("/")} disabled={loading}>
@@ -66,4 +72,4 @@ function JoinRoom() {
   );
 }
 
-export default JoinRoom;
+export default CreateRoom;
