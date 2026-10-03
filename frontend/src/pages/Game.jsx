@@ -3,7 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import Phaser from "phaser";
 
 import { supabase } from "../lib/supabase";
-import { getRecipes } from "../services/api";
+import { getMatch, getRecipes } from "../services/api";
+import { socket } from "../services/socket";
 
 import "./Game.css";
 
@@ -12,10 +13,15 @@ function Game() {
   const navigate = useNavigate();
 
   const gameRef = useRef(null);
+
+  const [user, setUser] = useState(null);
+  const [match, setMatch] = useState(null);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const loadGame = async () => {
       try {
         const {
@@ -27,27 +33,46 @@ function Game() {
           return;
         }
 
-        // Load recipes only once
-        const data = await getRecipes();
-        setRecipes(data);
+        const matchResult = await getMatch(roomCode);
+        const recipeData = await getRecipes();
 
+        if (!mounted) return;
+
+        setUser(user);
+        setMatch(matchResult.data);
+        setRecipes(recipeData);
         setLoading(false);
       } catch (error) {
-        console.error(error);
-        setLoading(false);
+        console.error("Game loading error:", error);
+
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadGame();
-  }, [navigate]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, roomCode]);
 
   useEffect(() => {
     if (loading) return;
+    if (!user) return;
+    if (!match) return;
     if (!gameRef.current) return;
+
+    let game;
 
     class KitchenScene extends Phaser.Scene {
       constructor() {
         super("KitchenScene");
+
+        this.otherPlayers = {};
+        this.lastSentX = null;
+        this.lastSentY = null;
       }
 
       preload() {}
@@ -55,13 +80,12 @@ function Game() {
       create() {
         const { width, height } = this.scale;
 
-        // =========================
+        // =====================================
         // BACKGROUND
-        // =========================
+        // =====================================
 
         this.add.rectangle(width / 2, height / 2, width, height, 0xe8e8e8);
 
-        // Floor
         this.add.rectangle(
           width / 2,
           height / 2,
@@ -70,33 +94,17 @@ function Game() {
           0xffffff,
         );
 
-        // Kitchen wall
+        // =====================================
+        // TOP WALL
+        // =====================================
+
         this.add.rectangle(width / 2, 30, width - 40, 40, 0x555555);
 
-        // =========================
-        // COUNTERS
-        // =========================
+        // =====================================
+        // MEAT STATION
+        // =====================================
 
         this.add.rectangle(160, 150, 180, 80, 0x8b5a2b);
-
-        this.add.rectangle(width - 160, 150, 180, 80, 0x8b5a2b);
-
-        // =========================
-        // GRILL
-        // =========================
-
-        this.grill = this.add.rectangle(width / 2, 150, 120, 80, 0x333333);
-
-        this.add
-          .text(width / 2, 150, "GRILL", {
-            fontSize: "20px",
-            color: "#ffffff",
-          })
-          .setOrigin(0.5);
-
-        // =========================
-        // MEAT
-        // =========================
 
         this.meat = this.add.circle(160, 150, 20, 0xc0392b);
 
@@ -107,9 +115,34 @@ function Game() {
           })
           .setOrigin(0.5);
 
-        // =========================
+        // =====================================
+        // GRILL
+        // =====================================
+
+        this.grill = this.add.rectangle(width / 2, 150, 120, 80, 0x333333);
+
+        this.add
+          .text(width / 2, 150, "GRILL", {
+            fontSize: "20px",
+            color: "#ffffff",
+          })
+          .setOrigin(0.5);
+
+        this.grillLabel = this.add
+          .text(width / 2, 205, "", {
+            fontSize: "16px",
+            color: "#000000",
+            backgroundColor: "#ffffff",
+            padding: {
+              x: 6,
+              y: 4,
+            },
+          })
+          .setOrigin(0.5);
+
+        // =====================================
         // TOMATO
-        // =========================
+        // =====================================
 
         this.tomato = this.add.circle(width - 160, 150, 20, 0xe74c3c);
 
@@ -120,9 +153,9 @@ function Game() {
           })
           .setOrigin(0.5);
 
-        // =========================
-        // PLAYER
-        // =========================
+        // =====================================
+        // CURRENT PLAYER
+        // =====================================
 
         this.player = this.add.rectangle(
           width / 2,
@@ -133,21 +166,27 @@ function Game() {
         );
 
         this.playerLabel = this.add
-          .text(width / 2, height / 2 - 35, "PLAYER", {
+          .text(width / 2, height / 2 - 35, "YOU", {
             fontSize: "14px",
             color: "#000000",
+            fontStyle: "bold",
           })
           .setOrigin(0.5);
 
-        // =========================
+        // =====================================
         // PLAYER STATE
-        // =========================
+        // =====================================
 
         this.heldItem = null;
+        this.heldMeat = null;
 
-        // =========================
+        this.cooking = false;
+        this.cookedMeat = false;
+        this.cookedMeatObject = null;
+
+        // =====================================
         // KEYBOARD
-        // =========================
+        // =====================================
 
         this.keys = this.input.keyboard.addKeys({
           W: Phaser.Input.Keyboard.KeyCodes.W,
@@ -160,9 +199,9 @@ function Game() {
           Phaser.Input.Keyboard.KeyCodes.E,
         );
 
-        // =========================
+        // =====================================
         // INTERACTION TEXT
-        // =========================
+        // =====================================
 
         this.interactText = this.add.text(20, height - 40, "", {
           fontSize: "18px",
@@ -173,34 +212,193 @@ function Game() {
             y: 5,
           },
         });
+
+        // =====================================
+        // SOCKET
+        // =====================================
+
+        socket.connect();
+
+        socket.emit("join-room", {
+          roomCode,
+          userId: user.id,
+        });
+
+        // =====================================
+        // RECEIVE OTHER PLAYER POSITION
+        // =====================================
+
+        socket.on("player-position", ({ userId, x, y }) => {
+          if (userId === user.id) {
+            return;
+          }
+
+          this.updateOtherPlayer(userId, x, y);
+        });
+
+        // =====================================
+        // RECEIVE OTHER PLAYER JOIN
+        // =====================================
+
+        socket.on("player-joined", ({ userId }) => {
+          if (userId === user.id) {
+            return;
+          }
+
+          console.log("Other player joined:", userId);
+        });
       }
+
+      // =====================================
+      // CREATE / UPDATE OTHER PLAYER
+      // =====================================
+
+      updateOtherPlayer(userId, x, y) {
+        if (!this.otherPlayers[userId]) {
+          const player = this.add.rectangle(x, y, 40, 40, 0xe67e22);
+
+          const label = this.add
+            .text(x, y - 35, "PLAYER", {
+              fontSize: "14px",
+              color: "#000000",
+              fontStyle: "bold",
+            })
+            .setOrigin(0.5);
+
+          this.otherPlayers[userId] = {
+            player,
+            label,
+          };
+        }
+
+        const other = this.otherPlayers[userId];
+
+        other.player.x = x;
+        other.player.y = y;
+
+        other.label.x = x;
+        other.label.y = y - 35;
+      }
+
+      // =====================================
+      // START COOKING
+      // =====================================
+
+      startCooking() {
+        if (this.heldItem !== "meat") {
+          return;
+        }
+
+        this.cooking = true;
+        this.heldItem = null;
+
+        if (this.heldMeat) {
+          this.heldMeat.destroy();
+          this.heldMeat = null;
+        }
+
+        let remaining = 7;
+
+        this.grillLabel.setText(`Cooking: ${remaining}s`);
+
+        this.cookingTimer = this.time.addEvent({
+          delay: 1000,
+          repeat: 6,
+
+          callback: () => {
+            remaining--;
+
+            if (remaining > 0) {
+              this.grillLabel.setText(`Cooking: ${remaining}s`);
+            }
+
+            if (remaining <= 0) {
+              this.finishCooking();
+            }
+          },
+        });
+      }
+
+      // =====================================
+      // FINISH COOKING
+      // =====================================
+
+      finishCooking() {
+        this.cooking = false;
+        this.cookedMeat = true;
+
+        this.grillLabel.setText("Cooked Meat");
+
+        this.interactText.setText("Cooked Meat is ready");
+
+        this.cookedMeatObject = this.add.circle(
+          this.grill.x,
+          this.grill.y,
+          15,
+          0x8b4513,
+        );
+      }
+
+      // =====================================
+      // SEND POSITION
+      // =====================================
+
+      sendPosition() {
+        if (!socket.connected) {
+          return;
+        }
+
+        const x = Math.round(this.player.x);
+
+        const y = Math.round(this.player.y);
+
+        if (x === this.lastSentX && y === this.lastSentY) {
+          return;
+        }
+
+        this.lastSentX = x;
+        this.lastSentY = y;
+
+        socket.emit("player-position", {
+          roomCode,
+          userId: user.id,
+          x,
+          y,
+        });
+      }
+
+      // =====================================
+      // UPDATE
+      // =====================================
 
       update() {
         const speed = 4;
 
-        // =========================
-        // PLAYER MOVEMENT
-        // =========================
+        // =====================================
+        // MOVEMENT
+        // =====================================
 
-        if (this.keys.W.isDown) {
-          this.player.y -= speed;
+        if (!this.cooking) {
+          if (this.keys.W.isDown) {
+            this.player.y -= speed;
+          }
+
+          if (this.keys.S.isDown) {
+            this.player.y += speed;
+          }
+
+          if (this.keys.A.isDown) {
+            this.player.x -= speed;
+          }
+
+          if (this.keys.D.isDown) {
+            this.player.x += speed;
+          }
         }
 
-        if (this.keys.S.isDown) {
-          this.player.y += speed;
-        }
-
-        if (this.keys.A.isDown) {
-          this.player.x -= speed;
-        }
-
-        if (this.keys.D.isDown) {
-          this.player.x += speed;
-        }
-
-        // =========================
-        // KEEP PLAYER INSIDE MAP
-        // =========================
+        // =====================================
+        // BOUNDARIES
+        // =====================================
 
         this.player.x = Phaser.Math.Clamp(
           this.player.x,
@@ -214,13 +412,71 @@ function Game() {
           this.scale.height - 60,
         );
 
-        // Player label follows player
+        // =====================================
+        // PLAYER LABEL
+        // =====================================
+
         this.playerLabel.x = this.player.x;
+
         this.playerLabel.y = this.player.y - 35;
 
-        // =========================
-        // MEAT INTERACTION
-        // =========================
+        // =====================================
+        // SEND POSITION TO SERVER
+        // =====================================
+
+        this.sendPosition();
+
+        // =====================================
+        // COOKING
+        // =====================================
+
+        if (this.cooking) {
+          this.interactText.setText("Cooking Meat...");
+
+          return;
+        }
+
+        // =====================================
+        // HOLDING MEAT
+        // =====================================
+
+        if (this.heldItem === "meat") {
+          const distanceToGrill = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            this.grill.x,
+            this.grill.y,
+          );
+
+          if (distanceToGrill < 90) {
+            this.interactText.setText("Press E to grill Meat");
+
+            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+              this.startCooking();
+            }
+          } else {
+            this.interactText.setText("Holding Meat");
+          }
+
+          if (!this.heldMeat) {
+            this.heldMeat = this.add.circle(
+              this.player.x,
+              this.player.y - 25,
+              10,
+              0xc0392b,
+            );
+          }
+
+          this.heldMeat.x = this.player.x;
+
+          this.heldMeat.y = this.player.y - 25;
+
+          return;
+        }
+
+        // =====================================
+        // PICK UP MEAT
+        // =====================================
 
         if (!this.heldItem) {
           const distanceToMeat = Phaser.Math.Distance.Between(
@@ -237,6 +493,7 @@ function Game() {
               this.heldItem = "meat";
 
               this.meat.setVisible(false);
+
               this.meatLabel.setVisible(false);
 
               this.interactText.setText("Holding Meat");
@@ -245,60 +502,63 @@ function Game() {
             this.interactText.setText("");
           }
         }
-
-        // =========================
-        // HOLDING MEAT
-        // =========================
-
-        if (this.heldItem === "meat") {
-          this.interactText.setText("Holding Meat");
-
-          // Create a small meat icon above player
-          if (!this.heldMeat) {
-            this.heldMeat = this.add.circle(
-              this.player.x,
-              this.player.y - 25,
-              10,
-              0xc0392b,
-            );
-          }
-
-          this.heldMeat.x = this.player.x;
-          this.heldMeat.y = this.player.y - 25;
-        }
       }
     }
 
+    // =====================================
+    // PHASER CONFIG
+    // =====================================
+
     const config = {
       type: Phaser.AUTO,
-
       width: 900,
       height: 600,
-
       parent: gameRef.current,
-
       backgroundColor: "#ffffff",
-
       scene: KitchenScene,
     };
 
-    const game = new Phaser.Game(config);
+    game = new Phaser.Game(config);
+
+    // =====================================
+    // CLEANUP
+    // =====================================
 
     return () => {
-      game.destroy(true);
+      socket.off("player-position");
+      socket.off("player-joined");
+
+      socket.disconnect();
+
+      if (game) {
+        game.destroy(true);
+      }
     };
-  }, [loading]);
+  }, [loading, user, match, roomCode]);
+
+  // =====================================
+  // LOADING
+  // =====================================
 
   if (loading) {
     return <div className="game-loading">Loading game...</div>;
   }
+
+  // =====================================
+  // GAME UI
+  // =====================================
 
   return (
     <div className="game-page">
       <div className="game-header">
         <div>
           <h1>Kitchen Panic</h1>
+
           <p>Room: {roomCode}</p>
+
+          <p>
+            Players: {match?.players?.length || 0}/{match?.max_players || 0}
+          </p>
         </div>
 
         <div>
@@ -329,7 +589,10 @@ function Game() {
           <div className="player-panel">
             <h2>Player</h2>
 
+            <p>You: {user?.email}</p>
+
             <p>Score: 0</p>
+
             <p>Coins: 0</p>
           </div>
         </div>
