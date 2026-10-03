@@ -1,0 +1,183 @@
+.lobby-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f5f5f5;
+  padding: 20px;
+}
+
+.lobby-card {
+  width: 100%;
+  max-width: 520px;
+  background: white;
+  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.lobby-card h1 {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.lobby-card h2 {
+  margin-top: 25px;
+}
+
+.lobby-card input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  margin: 15px 0;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 3px;
+}
+
+.lobby-card button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  background: #222;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.lobby-card button:hover {
+  opacity: 0.9;
+}
+
+.lobby-card button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.room-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.room-info p {
+  margin: 0;
+  color: #666;
+}
+
+.room-info strong {
+  font-size: 18px;
+}
+
+.players-list {
+  margin-top: 15px;
+}
+
+.player-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px;
+  margin-bottom: 10px;
+  background: #f7f7f7;
+  border-radius: 8px;
+}
+
+.host {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #222;
+  color: white;
+}
+
+.ready {
+  color: green;
+  font-weight: bold;
+}
+
+.not-ready {
+  color: #999;
+  font-weight: bold;
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.lobby-actions button {
+  flex: 1;
+}
+
+.lobby-actions .secondary {
+  background: #777;
+}
+
+.lobby-actions .start-button {
+  background: #198754;
+}
+
+.error {
+  margin-top: 15px;
+  color: #dc3545;
+  text-align: center;
+}
+
+.game-started {
+  margin-top: 20px;
+  padding: 15px;
+  text-align: center;
+  border-radius: 8px;
+  background: #d1e7dd;
+  color: #0f5132;
+  font-weight: bold;
+}
+.create-room-section,
+.join-room-section {
+  margin-top: 20px;
+}
+
+.create-room-section h3,
+.join-room-section h3 {
+  margin-bottom: 12px;
+}
+
+.create-room-section label {
+  display: block;
+  margin-bottom: 8px;
+  color: #666;
+}
+
+.create-room-section select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px;
+  margin-bottom: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  background: white;
+}
+
+.divider {
+  text-align: center;
+  margin: 25px 0;
+  color: #999;
+  font-weight: bold;
+}
+.logout-button {
+  margin-top: 15px;
+  background: #dc3545 !important;
+}
+
+.logout-button:hover {
+  background: #bb2d3b !important;
+}

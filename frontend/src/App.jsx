@@ -1,0 +1,125 @@
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+
+import { supabase } from "./lib/supabase";
+
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import CreateRoom from "./pages/CreateRoom";
+import JoinRoom from "./pages/JoinRoom";
+import Lobby from "./pages/Lobby";
+import Recipes from "./pages/Recipes";
+
+import "./App.css";
+
+function ProtectedRoute({ session, children }) {
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setSession(session);
+      setLoading(false);
+    };
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="loading-screen">Loading...</div>;
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+
+        <Route
+          path="/login"
+          element={session ? <Navigate to="/" replace /> : <Login />}
+        />
+
+        <Route
+          path="/register"
+          element={session ? <Navigate to="/" replace /> : <Register />}
+        />
+
+        {/* Protected */}
+
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute session={session}>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/createroom"
+          element={
+            <ProtectedRoute session={session}>
+              <CreateRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/joinroom"
+          element={
+            <ProtectedRoute session={session}>
+              <JoinRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/lobby/:roomCode"
+          element={
+            <ProtectedRoute session={session}>
+              <Lobby />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/recipes"
+          element={
+            <ProtectedRoute session={session}>
+              <Recipes />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Unknown route */}
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;

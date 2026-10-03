@@ -1,0 +1,144 @@
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+/* General pages */
+
+.page-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+
+.page-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.page-card h1 {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 25px;
+}
+
+.page-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page-card input,
+.page-card select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  outline: none;
+}
+
+.page-card input:focus,
+.page-card select:focus {
+  border-color: #18181b;
+}
+
+.page-card button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #18181b;
+  color: white;
+}
+
+.page-card button:hover {
+  opacity: 0.9;
+}
+
+.secondary-button {
+  background: #e4e4e7 !important;
+  color: #18181b !important;
+}
+
+.logout-button {
+  background: #dc2626 !important;
+  color: white !important;
+}
+
+/* Home */
+
+.home-card {
+  text-align: center;
+}
+
+.home-card h1 {
+  font-size: 42px;
+}
+
+.profile-info {
+  margin-bottom: 25px;
+}
+
+.profile-info h2 {
+  margin-bottom: 10px;
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Messages */
+
+.error {
+  color: #dc2626;
+  margin: 10px 0;
+}
+
+.success {
+  color: #16a34a;
+  margin: 10px 0;
+}
+
+.switch-text {
+  text-align: center;
+  margin-top: 20px;
+  margin-bottom: 5px;
+}
+
+/* Recipes */
+
+.recipes-card {
+  max-width: 700px;
+}
+
+.recipes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-item {
+  padding: 15px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+}
+
+.recipe-item h2 {
+  margin-top: 0;
+}
+
+.recipe-item p {
+  margin: 5px 0;
+}
