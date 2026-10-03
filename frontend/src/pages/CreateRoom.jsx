@@ -1,19 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { joinMatch } from "../services/api";
 
-function CreateRoom() {
+function JoinRoom() {
   const navigate = useNavigate();
 
-  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const createRoom = async () => {
-    setLoading(true);
-    setError("");
-
+  const handleJoinRoom = async () => {
     try {
+      setLoading(true);
+      setError("");
+
+      const code = roomCode.trim().toUpperCase();
+
+      if (!code) {
+        throw new Error("Please enter a room code");
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -23,40 +30,11 @@ function CreateRoom() {
         return;
       }
 
-      console.log("Creating room for user:", user.id);
-
-      const response = await fetch("http://localhost:5000/api/matches", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          max_players: maxPlayers,
-        }),
-      });
-
-      const result = await response.json();
-
-      console.log("Create room response:", result);
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || result.error || "Failed to create room",
-        );
-      }
-
-      if (!result.data?.room_code) {
-        throw new Error("Server did not return a room code");
-      }
-
-      const code = result.data.room_code;
-
-      console.log("Created room:", code);
+      await joinMatch(code, user.id);
 
       navigate(`/lobby/${code}`);
     } catch (err) {
-      console.error("Create room error:", err);
+      console.error(err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -64,34 +42,28 @@ function CreateRoom() {
   };
 
   return (
-    <div className="page-container">
-      <div className="page-card">
-        <h1>Create Room</h1>
+    <div className="page">
+      <h1>Join Room</h1>
 
-        <label>Maximum Players</label>
+      <input
+        type="text"
+        placeholder="Enter room code"
+        value={roomCode}
+        maxLength={6}
+        onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+      />
 
-        <select
-          value={maxPlayers}
-          onChange={(e) => setMaxPlayers(Number(e.target.value))}
-        >
-          <option value={1}>1 Player</option>
-          <option value={2}>2 Players</option>
-          <option value={3}>3 Players</option>
-          <option value={4}>4 Players</option>
-        </select>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-        {error && <p className="error">{error}</p>}
+      <button onClick={handleJoinRoom} disabled={loading}>
+        {loading ? "Joining..." : "Join Room"}
+      </button>
 
-        <button onClick={createRoom} disabled={loading}>
-          {loading ? "Creating..." : "Create Room"}
-        </button>
-
-        <button className="secondary-button" onClick={() => navigate("/")}>
-          Back
-        </button>
-      </div>
+      <button onClick={() => navigate("/")} disabled={loading}>
+        Back
+      </button>
     </div>
   );
 }
 
-export default CreateRoom;
+export default JoinRoom;

@@ -1,6 +1,11 @@
+import dotenv from "dotenv";
 import http from "http";
-import app from "./app.js";
+
 import { Server } from "socket.io";
+
+import app from "./app.js";
+
+dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
@@ -9,6 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
+    methods: ["GET", "POST"],
   },
 });
 
@@ -16,6 +22,10 @@ io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
   socket.on("join-room", ({ roomCode, userId }) => {
+    if (!roomCode || !userId) {
+      return;
+    }
+
     socket.join(roomCode);
 
     console.log(`User ${userId} joined room ${roomCode}`);

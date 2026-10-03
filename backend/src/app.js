@@ -1,14 +1,18 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
+
 import recipeRoutes from "./routes/recipeRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
 
-dotenv.config();
-
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  }),
+);
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -17,7 +21,31 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/api/test-db", async (req, res) => {
+  res.json({
+    success: true,
+    message: "Database API is ready",
+  });
+});
+
 app.use("/api/recipes", recipeRoutes);
+
 app.use("/api/matches", matchRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
+});
 
 export default app;

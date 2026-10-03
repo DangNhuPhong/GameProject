@@ -13,8 +13,10 @@ function Recipes() {
     const loadRecipes = async () => {
       try {
         const data = await getRecipes();
-        setRecipes(data);
+
+        setRecipes(data || []);
       } catch (err) {
+        console.error(err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -25,36 +27,36 @@ function Recipes() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="page-container">
-        <h2>Loading recipes...</h2>
-      </div>
-    );
+    return <div>Loading recipes...</div>;
   }
 
   return (
-    <div className="page-container">
-      <div className="page-card recipes-card">
-        <h1>Recipes</h1>
+    <div className="page">
+      <h1>Recipes</h1>
 
-        {error && <p className="error">{error}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-        <div className="recipes-list">
-          {recipes.map((recipe) => (
-            <div className="recipe-item" key={recipe.id}>
-              <h2>{recipe.name}</h2>
+      <div>
+        {recipes.map((recipe) => (
+          <div
+            key={recipe.id}
+            style={{
+              border: "1px solid #ddd",
+              padding: "20px",
+              marginBottom: "15px",
+              borderRadius: "10px",
+            }}
+          >
+            <h2>{recipe.name}</h2>
 
-              <p>Score: {recipe.base_score}</p>
+            <p>Score: {recipe.base_score}</p>
 
-              <p>Time: {recipe.time_limit}s</p>
-            </div>
-          ))}
-        </div>
-
-        <button className="secondary-button" onClick={() => navigate("/")}>
-          Back
-        </button>
+            <p>Time limit: {recipe.time_limit}s</p>
+          </div>
+        ))}
       </div>
+
+      <button onClick={() => navigate("/")}>Back Home</button>
     </div>
   );
 }

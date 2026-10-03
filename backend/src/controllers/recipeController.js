@@ -1,80 +1,104 @@
 import { supabase } from "../config/supabase.js";
 
 export const getRecipes = async (req, res) => {
-  const { data, error } = await supabase
-    .from("recipes")
-    .select("*")
-    .order("id", { ascending: true });
-
-  if (error) {
-    return res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-
-  res.json({
-    success: true,
-    data,
-  });
-};
-export const getRecipeById = async (req, res) => {
-  const { id } = req.params;
-
-  const { data: recipe, error: recipeError } = await supabase
-    .from("recipes")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (recipeError) {
-    return res.status(404).json({
-      success: false,
-      error: "Recipe not found",
-    });
-  }
-
-  const { data: materials, error: materialsError } = await supabase
-    .from("recipe_materials")
-    .select(
-      `
-      quantity,
-      material:materials (
-        id,
-        name,
-        image,
-        type
+  try {
+    const { data, error } = await supabase
+      .from("recipes")
+      .select(
+        `
+          *,
+          recipe_materials (
+            id,
+            quantity,
+            materials (
+              id,
+              name,
+              image,
+              type
+            )
+          ),
+          processing_steps (
+            id,
+            step_order,
+            action,
+            duration
+          )
+        `,
       )
-    `,
-    )
-    .eq("recipe_id", id);
+      .order("id", {
+        ascending: true,
+      });
 
-  if (materialsError) {
+    if (error) {
+      console.error(error);
+
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(error);
+
     return res.status(500).json({
       success: false,
-      error: materialsError.message,
+      message: "Server error",
     });
   }
+};
 
-  const { data: steps, error: stepsError } = await supabase
-    .from("processing_steps")
-    .select("*")
-    .eq("recipe_id", id)
-    .order("step_order", { ascending: true });
+export const getRecipeById = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  if (stepsError) {
+    const { data, error } = await supabase
+      .from("recipes")
+      .select(
+        `
+          *,
+          recipe_materials (
+            id,
+            quantity,
+            materials (
+              id,
+              name,
+              image,
+              type
+            )
+          ),
+          processing_steps (
+            id,
+            step_order,
+            action,
+            duration
+          )
+        `,
+      )
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      return res.status(404).json({
+        success: false,
+        message: "Recipe not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(error);
+
     return res.status(500).json({
       success: false,
-      error: stepsError.message,
+      message: "Server error",
     });
   }
-
-  res.json({
-    success: true,
-    data: {
-      ...recipe,
-      materials,
-      steps,
-    },
-  });
 };

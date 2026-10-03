@@ -23,6 +23,7 @@ function ProtectedRoute({ session, children }) {
 
 function App() {
   const [session, setSession] = useState(null);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,8 +56,6 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
-
         <Route
           path="/login"
           element={session ? <Navigate to="/" replace /> : <Login />}
@@ -66,8 +65,6 @@ function App() {
           path="/register"
           element={session ? <Navigate to="/" replace /> : <Register />}
         />
-
-        {/* Protected */}
 
         <Route
           path="/"
@@ -113,8 +110,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        {/* Unknown route */}
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

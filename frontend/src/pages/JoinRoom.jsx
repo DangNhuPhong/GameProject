@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-
+import { API_URL } from "../services/config";
 function JoinRoom() {
   const navigate = useNavigate();
 
@@ -30,18 +30,15 @@ function JoinRoom() {
         return;
       }
 
-      const response = await fetch(
-        `http://localhost:5000/api/matches/${code}/join`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            user_id: user.id,
-          }),
+      const response = await fetch(`${API_URL}/api/matches/${code}/join`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          user_id: user.id,
+        }),
+      });
 
       const result = await response.json();
 
