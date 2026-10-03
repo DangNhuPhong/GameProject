@@ -1,0 +1,94 @@
+.game-page {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f4f4f4;
+  box-sizing: border-box;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.game-header h1 {
+  margin: 0;
+}
+
+.game-header p {
+  margin: 5px 0 0;
+}
+
+.game-player {
+  text-align: right;
+}
+
+.game-container {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  max-width: 1400px;
+  margin: auto;
+}
+
+.game-board {
+  min-height: 600px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.kitchen-placeholder {
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #ddd;
+  border-radius: 10px;
+}
+
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.order-panel,
+.player-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.recipe-card {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.recipe-card h3 {
+  margin: 0 0 8px;
+}
+
+.recipe-card p {
+  margin: 4px 0;
+}
+
+.leave-button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.game-loading {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

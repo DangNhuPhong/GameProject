@@ -10,7 +10,7 @@ import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
 import Lobby from "./pages/Lobby";
 import Recipes from "./pages/Recipes";
-
+import Game from "./pages/Game";
 import "./App.css";
 
 function ProtectedRoute({ session, children }) {
@@ -98,6 +98,14 @@ function App() {
           element={
             <ProtectedRoute session={session}>
               <Lobby />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/:roomCode"
+          element={
+            <ProtectedRoute session={session}>
+              <Game />
             </ProtectedRoute>
           }
         />
