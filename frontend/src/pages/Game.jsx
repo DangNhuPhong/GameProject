@@ -98,11 +98,8 @@ function Game() {
         // =================================
 
         this.meatAvailable = true;
-
         this.cooking = false;
-
         this.cookedMeat = false;
-
         this.cookingPlayerId = null;
 
         // =================================
@@ -110,7 +107,6 @@ function Game() {
         // =================================
 
         this.heldItem = null;
-
         this.heldMeat = null;
 
         // =================================
@@ -237,8 +233,14 @@ function Game() {
           D: Phaser.Input.Keyboard.KeyCodes.D,
         });
 
+        // E = interaction
         this.interactKey = this.input.keyboard.addKey(
           Phaser.Input.Keyboard.KeyCodes.E,
+        );
+
+        // Q = drop
+        this.dropKey = this.input.keyboard.addKey(
+          Phaser.Input.Keyboard.KeyCodes.Q,
         );
 
         // =================================
@@ -290,20 +292,38 @@ function Game() {
           // -----------------------------
 
           if (meatState === "available") {
-            this.meatAvailable = true;
             this.cooking = false;
-            this.cookedMeat = false;
             this.cookingPlayerId = null;
-
-            this.meat.setVisible(true);
-            this.meatLabel.setVisible(true);
+            this.grillLabel.setText("");
 
             if (this.cookedMeatObject) {
               this.cookedMeatObject.destroy();
               this.cookedMeatObject = null;
             }
 
-            this.grillLabel.setText("");
+            if (state.meat.itemType === "cooked-meat") {
+              // Thịt chín đang nằm dưới đất
+              this.meatAvailable = false;
+              this.cookedMeat = true;
+
+              this.meat.setVisible(false);
+              this.meatLabel.setVisible(false);
+
+              this.cookedMeatObject = this.add.circle(
+                state.meat.x,
+                state.meat.y,
+                15,
+                0x8b4513,
+              );
+            } else {
+              // Thịt sống
+              this.meatAvailable = true;
+              this.cookedMeat = false;
+
+              this.meat.setPosition(state.meat.x, state.meat.y);
+              this.meat.setVisible(true);
+              this.meatLabel.setVisible(true);
+            }
           }
 
           // -----------------------------
@@ -390,62 +410,85 @@ function Game() {
         // =================================
         // MEAT PICKED
         // =================================
+        // =================================
+        // MEAT PICKED
+        // =================================
 
         socket.on("meat-picked", ({ userId }) => {
           console.log("Meat picked by:", userId);
 
-          this.hideMeat();
+          this.meatAvailable = false;
+          this.meat.setVisible(false);
+          this.meatLabel.setVisible(false);
 
           if (userId === user.id) {
             this.heldItem = "meat";
-
-            this.interactText.setText("Holding Meat");
           }
         });
-
-        // =================================
-        // MEAT DROPPED
-        // =================================
 
         socket.on("meat-dropped", ({ x, y, itemType }) => {
           console.log("Meat dropped:", itemType, x, y);
 
-          this.meatAvailable = true;
-          this.cooking = false;
-          this.cookedMeat = false;
-
-          this.meat.setPosition(x, y);
-
-          this.meat.setVisible(true);
-          this.meatLabel.setVisible(true);
+          // Clear held item
+          this.heldItem = null;
 
           if (this.heldMeat) {
             this.heldMeat.destroy();
             this.heldMeat = null;
           }
 
-          this.heldItem = null;
+          // =================================
+          // RAW MEAT DROPPED
+          // =================================
 
           if (itemType === "raw-meat") {
+            this.meatAvailable = true;
+            this.cooking = false;
             this.cookedMeat = false;
+
+            this.meat.setPosition(x, y);
+
             this.meat.setFillStyle(0xc0392b);
+
+            this.meat.setVisible(true);
+            this.meatLabel.setVisible(true);
+
+            if (this.cookedMeatObject) {
+              this.cookedMeatObject.destroy();
+              this.cookedMeatObject = null;
+            }
+
+            this.grillLabel.setText("");
+
+            return;
           }
+
+          // =================================
+          // COOKED MEAT DROPPED
+          // =================================
 
           if (itemType === "cooked-meat") {
             this.meatAvailable = false;
+            this.cooking = false;
             this.cookedMeat = true;
 
+            // Hide raw meat object
             this.meat.setVisible(false);
             this.meatLabel.setVisible(false);
 
-            this.showCookedMeat();
-
+            // Remove old cooked meat object
             if (this.cookedMeatObject) {
-              this.cookedMeatObject.setPosition(x, y);
+              this.cookedMeatObject.destroy();
+              this.cookedMeatObject = null;
             }
-          }
 
-          this.grillLabel.setText("");
+            // Create cooked meat at drop position
+            this.cookedMeatObject = this.add.circle(x, y, 15, 0x8b4513);
+
+            this.grillLabel.setText("");
+
+            return;
+          }
         });
 
         // =================================
@@ -769,7 +812,6 @@ function Game() {
         // =================================
 
         this.playerLabel.x = this.player.x;
-
         this.playerLabel.y = this.player.y - 35;
 
         // =================================
@@ -783,6 +825,16 @@ function Game() {
         // =================================
 
         if (this.heldItem) {
+          // =================================
+          // Q = DROP
+          // =================================
+
+          if (Phaser.Input.Keyboard.JustDown(this.dropKey)) {
+            this.dropItem();
+
+            return;
+          }
+
           // -----------------------------
           // RAW MEAT
           // -----------------------------
@@ -796,19 +848,16 @@ function Game() {
             );
 
             if (distanceToGrill < 90) {
-              this.interactText.setText("Press E to grill Meat");
+              this.interactText.setText("E: Grill Meat | Q: Drop");
 
               if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
                 this.startCooking();
               }
             } else {
-              this.interactText.setText("Press E to drop Meat");
-
-              if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-                this.dropItem();
-              }
+              this.interactText.setText("Q: Drop Meat");
             }
 
+            // Show held raw meat
             if (!this.heldMeat) {
               this.heldMeat = this.add.circle(
                 this.player.x,
@@ -830,12 +879,9 @@ function Game() {
           // -----------------------------
 
           if (this.heldItem === "cooked-meat") {
-            this.interactText.setText("Press E to drop Cooked Meat");
+            this.interactText.setText("Q: Drop Cooked Meat");
 
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-              this.dropItem();
-            }
-
+            // Show held cooked meat
             if (!this.heldMeat) {
               this.heldMeat = this.add.circle(
                 this.player.x,
@@ -868,15 +914,23 @@ function Game() {
         // =================================
 
         if (!this.heldItem && this.cookedMeat) {
-          const distanceToGrill = Phaser.Math.Distance.Between(
+          let cookedX = this.grill.x;
+          let cookedY = this.grill.y;
+
+          if (this.cookedMeatObject) {
+            cookedX = this.cookedMeatObject.x;
+            cookedY = this.cookedMeatObject.y;
+          }
+
+          const distanceToCookedMeat = Phaser.Math.Distance.Between(
             this.player.x,
             this.player.y,
-            this.grill.x,
-            this.grill.y,
+            cookedX,
+            cookedY,
           );
 
-          if (distanceToGrill < 90) {
-            this.interactText.setText("Press E to pick Cooked Meat");
+          if (distanceToCookedMeat < 70) {
+            this.interactText.setText("E: Pick Cooked Meat");
 
             if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
               this.pickCookedMeat();
@@ -899,7 +953,7 @@ function Game() {
           );
 
           if (distanceToMeat < 70) {
-            this.interactText.setText("Press E to pick up Meat");
+            this.interactText.setText("E: Pick up Meat");
 
             if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
               this.pickMeat();
@@ -937,19 +991,12 @@ function Game() {
 
     return () => {
       socket.off("game-state");
-
       socket.off("player-position");
-
       socket.off("player-joined");
-
       socket.off("meat-picked");
-
       socket.off("meat-dropped");
-
       socket.off("cooking-started");
-
       socket.off("cooking-finished");
-
       socket.off("cooked-meat-picked");
 
       socket.disconnect();
@@ -1044,6 +1091,25 @@ function Game() {
             <p>Coins: 0</p>
           </div>
         </div>
+      </div>
+
+      {/* =================================
+          CONTROLS
+      ================================= */}
+
+      <div
+        style={{
+          marginTop: "10px",
+          textAlign: "center",
+        }}
+      >
+        <p>
+          <strong>W A S D</strong> Move
+          {" | "}
+          <strong>E</strong> Pick / Grill
+          {" | "}
+          <strong>Q</strong> Drop
+        </p>
       </div>
 
       {/* =================================
