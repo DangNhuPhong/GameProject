@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabase";
 import { getMatch, setReady, startMatch } from "../services/api";
 
 import { socket } from "../services/socket";
-import { useNavigate, useParams } from "react-router-dom";
 import "./Lobby.css";
 
 function Lobby() {
