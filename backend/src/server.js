@@ -18,7 +18,7 @@ const io = new Server(server, {
   },
 });
 
-io.on("connection", (socket) => {
+iio.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
   // =====================================
@@ -31,6 +31,9 @@ io.on("connection", (socket) => {
     }
 
     socket.join(roomCode);
+
+    socket.data.roomCode = roomCode;
+    socket.data.userId = userId;
 
     console.log(`User ${userId} joined room ${roomCode}`);
 
@@ -53,8 +56,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(`User ${userId} ready: ${ready}`);
-
     socket.to(roomCode).emit("player-ready", {
       userId,
       ready,
@@ -69,8 +70,6 @@ io.on("connection", (socket) => {
     if (!roomCode) {
       return;
     }
-
-    console.log(`Game started in room ${roomCode}`);
 
     socket.to(roomCode).emit("game-started", {
       roomCode,
@@ -91,13 +90,54 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Send position to other players
-    // in the same room
     socket.to(roomCode).emit("player-position", {
       userId,
       x,
       y,
     });
+  });
+
+  // =====================================
+  // PICK UP MEAT
+  // =====================================
+
+  socket.on("meat-picked", ({ roomCode, userId }) => {
+    if (!roomCode || !userId) {
+      return;
+    }
+
+    console.log(`User ${userId} picked up meat in ${roomCode}`);
+
+    socket.to(roomCode).emit("meat-picked", {
+      userId,
+    });
+  });
+
+  // =====================================
+  // START COOKING
+  // =====================================
+
+  socket.on("start-cooking", ({ roomCode, userId }) => {
+    if (!roomCode || !userId) {
+      return;
+    }
+
+    console.log(`User ${userId} started cooking in ${roomCode}`);
+
+    // Tell everyone cooking has started
+    io.to(roomCode).emit("cooking-started", {
+      userId,
+      duration: 7000,
+    });
+
+    // Server-side cooking timer
+    setTimeout(() => {
+      console.log(`Cooking finished in ${roomCode}`);
+
+      io.to(roomCode).emit("cooking-finished", {
+        userId,
+      });
+    }, 7000);
   });
 
   // =====================================
