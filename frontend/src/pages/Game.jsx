@@ -8,13 +8,49 @@ import { socket } from "../services/socket";
 
 import "./Game.css";
 
-// World size (16:9). Scaled to fit the whole screen.
-// Station coordinates (meat 160,150 / grill 450,150) match the server.
+// =====================================
+// WORLD
+// =====================================
+
 const WORLD_W = 1200;
 const WORLD_H = 675;
 const TILE = 60;
+
 const FONT = "'Trebuchet MS', 'Segoe UI', Verdana, sans-serif";
+
 const TEXT_RES = 2;
+
+// =====================================
+// STATIONS
+// =====================================
+
+const MEAT_SHELF = {
+  id: "meat-shelf",
+  type: "meat",
+  x: 160,
+  y: 150,
+};
+
+const GRILL = {
+  id: "grill",
+  x: 450,
+  y: 150,
+};
+
+// Phải khớp với range của Station phía server (90)
+const INTERACT_RANGE = 90;
+
+// Màu item theo trạng thái nấu
+function itemColor(type, status) {
+  if (status === "burnt") return 0x1f1f1f;
+  if (status === "cooked") return 0x8b4513;
+
+  return type === "meat" ? 0xc0392b : 0x8b4513;
+}
+
+// =====================================
+// GAME
+// =====================================
 
 function Game() {
   const { roomCode } = useParams();
@@ -89,22 +125,23 @@ function Game() {
       constructor() {
         super("KitchenScene");
 
+        // Other players
         this.otherPlayers = {};
 
+        // Position synchronization
         this.lastSentX = null;
         this.lastSentY = null;
 
-        this.meatAvailable = true;
-        this.cooking = false;
-        this.cookedMeat = false;
-        this.cookingPlayerId = null;
+        // Dynamic items
+        this.items = {};
 
-        this.heldItem = null;
-        this.heldMeat = null;
+        // Trạng thái các trạm (grill...) do server gửi
+        this.stations = {};
 
-        this.cookedMeatObject = null;
-        this.localCookingTimer = null;
+        // Item currently held by local player
+        this.heldItemId = null;
 
+        // Interaction
         this.hintSig = null;
         this.hintWidth = 0;
       }
@@ -128,6 +165,7 @@ function Game() {
         for (let r = 0; r < Math.ceil(H / TILE); r++) {
           for (let c = 0; c < Math.ceil(W / TILE); c++) {
             g.fillStyle((r + c) % 2 === 0 ? 0xe3ece9 : 0xd5e2de, 1);
+
             g.fillRect(c * TILE, r * TILE, TILE, TILE);
           }
         }
@@ -142,41 +180,46 @@ function Game() {
         g.fillStyle(0x17403d, 1);
         g.fillRect(0, 84, W, 12);
 
-        // counter shadow
+        // Counter shadow
         g.fillStyle(0x000000, 0.12);
         g.fillRect(0, 206, W, 12);
 
-        // counter top + front
+        // Counter top
         g.fillStyle(0xdcae72, 1);
         g.fillRect(0, 96, W, 94);
 
         g.fillStyle(0xeac38a, 1);
         g.fillRect(0, 96, W, 4);
 
+        // Counter front
         g.fillStyle(0xa8743b, 1);
         g.fillRect(0, 190, W, 16);
 
         // =================================
-        // MEAT STATION
+        // MEAT SHELF
         // =================================
 
         g.fillStyle(0x6b3f1c, 1);
-        g.fillRoundedRect(160 - 95, 150 - 42, 190, 84, 12);
+
+        g.fillRoundedRect(MEAT_SHELF.x - 95, MEAT_SHELF.y - 42, 190, 84, 12);
+
         g.fillStyle(0x8b5a2b, 1);
-        g.fillRoundedRect(160 - 88, 150 - 35, 176, 70, 8);
 
-        this.meat = this.add
-          .circle(160, 150, 20, 0xc0392b)
-          .setStrokeStyle(3, 0x7b241c)
-          .setDepth(3);
+        g.fillRoundedRect(MEAT_SHELF.x - 88, MEAT_SHELF.y - 35, 176, 70, 8);
 
-        this.meatLabel = this.makeLabel(160, 228, "Meat");
+        this.meatShelf = this.add
+          .rectangle(MEAT_SHELF.x, MEAT_SHELF.y, 176, 70, 0x8b5a2b)
+          .setStrokeStyle(3, 0x6b3f1c)
+          .setDepth(2);
+
+        this.meatShelfLabel = this.makeLabel(MEAT_SHELF.x, 228, "Meat Shelf");
 
         // =================================
         // GRILL
         // =================================
 
         g.fillStyle(0x2b333a, 1);
+
         g.fillRoundedRect(450 - 68, 150 - 44, 136, 88, 12);
 
         this.grill = this.add
@@ -204,25 +247,34 @@ function Game() {
           .setDepth(2);
 
         this.grillLabel = this.makeLabel(450, 228, "");
+
         this.grillLabel.setVisible(false);
+
+        // Thanh tiến độ nướng
+        this.grillBar = this.add.graphics().setDepth(7);
 
         // =================================
         // TOMATO STATION
         // =================================
 
         g.fillStyle(0x6b3f1c, 1);
+
         g.fillRoundedRect(740 - 95, 150 - 42, 190, 84, 12);
+
         g.fillStyle(0x8b5a2b, 1);
+
         g.fillRoundedRect(740 - 88, 150 - 35, 176, 70, 8);
 
         this.add
           .circle(706, 154, 16, 0xe63946)
           .setStrokeStyle(3, 0xa4161a)
           .setDepth(3);
+
         this.add
           .circle(774, 154, 16, 0xe63946)
           .setStrokeStyle(3, 0xa4161a)
           .setDepth(3);
+
         this.tomato = this.add
           .circle(740, 146, 18, 0xef4b57)
           .setStrokeStyle(3, 0xa4161a)
@@ -255,10 +307,11 @@ function Game() {
           .setDepth(5);
 
         // =================================
-        // HINT BUBBLE (next to the player)
+        // HINT BUBBLE
         // =================================
 
         this.hintContainer = this.add.container(0, 0).setDepth(20);
+
         this.hintContainer.setVisible(false);
 
         // =================================
@@ -272,12 +325,18 @@ function Game() {
           D: Phaser.Input.Keyboard.KeyCodes.D,
         });
 
-        // E = interaction
         this.interactKey = this.input.keyboard.addKey(
           Phaser.Input.Keyboard.KeyCodes.E,
         );
+        this.input.keyboard.on("keydown-E", (event) => {
+          // Bỏ qua khi giữ phím E (key repeat)
+          if (event && event.repeat) {
+            return;
+          }
 
-        // Q = drop
+          this.handleInteract();
+        });
+
         this.dropKey = this.input.keyboard.addKey(
           Phaser.Input.Keyboard.KeyCodes.Q,
         );
@@ -288,12 +347,10 @@ function Game() {
 
         if (!socket.connected) {
           socket.connect();
+          console.log("SOCKET URL:", socket.io.uri);
+          console.log("SOCKET CONNECTED:", socket.connected);
+          console.log("SOCKET ID:", socket.id);
         }
-
-        socket.emit("join-room", {
-          roomCode,
-          userId: user.id,
-        });
 
         // =================================
         // GAME STATE
@@ -302,104 +359,126 @@ function Game() {
         socket.on("game-state", (state) => {
           console.log("Received game state:", state);
 
-          if (!state?.meat) {
+          if (!state) {
             return;
           }
 
-          const meatState = state.meat.state;
+          // Remove old item visuals
+          Object.values(this.items).forEach((item) => {
+            if (item.sprite) {
+              item.sprite.destroy();
+            }
+          });
 
-          // -----------------------------
-          // AVAILABLE
-          // -----------------------------
+          this.items = {};
+          this.heldItemId = null;
 
-          if (meatState === "available") {
-            this.cooking = false;
-            this.cookingPlayerId = null;
-            this.setGrillText("");
+          // Rebuild items from server
+          if (Array.isArray(state.items)) {
+            state.items.forEach((itemData) => {
+              this.createItemVisual(itemData);
+            });
+          }
 
-            this.clearCookedMeatObject();
+          // Rebuild stations from server
+          this.stations = {};
 
-            if (state.meat.itemType === "cooked-meat") {
-              // Cooked meat lying on the floor
-              this.meatAvailable = false;
-              this.cookedMeat = true;
+          if (Array.isArray(state.stations)) {
+            state.stations.forEach((stationData) => {
+              this.setStationState(stationData);
+            });
+          }
+        });
 
-              this.meat.setVisible(false);
-              this.meatLabel.setVisible(false);
+        // =================================
+        // ITEM CREATED
+        // =================================
 
-              this.cookedMeatObject = this.createCookedMeat(
-                state.meat.x,
-                state.meat.y,
-              );
-            } else {
-              // Raw meat
-              this.meatAvailable = true;
-              this.cookedMeat = false;
+        socket.on("item-created", ({ item }) => {
+          console.log("Item created:", item);
 
-              this.meat.setPosition(state.meat.x, state.meat.y);
-              this.meat.setVisible(true);
-              this.meatLabel.setVisible(true);
+          if (!item) {
+            return;
+          }
+
+          this.createItemVisual(item);
+
+          if (item.userId === user.id && item.state === "held") {
+            this.heldItemId = item.id;
+          }
+        });
+
+        // =================================
+        // ITEM PICKED
+        // =================================
+
+        socket.on("item-picked", ({ item }) => {
+          console.log("Item picked:", item);
+
+          if (!item) {
+            return;
+          }
+
+          if (!this.items[item.id]) {
+            this.createItemVisual(item);
+          } else {
+            this.updateItemVisual(item);
+          }
+
+          if (item.userId === user.id && item.state === "held") {
+            this.heldItemId = item.id;
+          }
+        });
+
+        // =================================
+        // ITEM DROPPED
+        // =================================
+
+        socket.on("item-dropped", ({ item }) => {
+          console.log("Item dropped:", item);
+
+          if (!item) {
+            return;
+          }
+
+          const existing = this.items[item.id];
+
+          if (!existing) {
+            this.createItemVisual(item);
+          } else {
+            this.updateItemVisual(item);
+          }
+
+          if (this.heldItemId === item.id && item.userId !== user.id) {
+            this.heldItemId = null;
+          }
+
+          if (this.heldItemId === item.id && item.state === "available") {
+            this.heldItemId = null;
+          }
+        });
+
+        // =================================
+        // STATION UPDATED
+        // =================================
+
+        socket.on("station-updated", ({ station, item }) => {
+          console.log("Station updated:", station, item);
+
+          if (item) {
+            // Tạo mới hoặc cập nhật visual của item
+            this.createItemVisual(item);
+
+            if (item.userId === user.id && item.state === "held") {
+              this.heldItemId = item.id;
+            } else if (this.heldItemId === item.id) {
+              // Item đã được đặt lên trạm
+              this.heldItemId = null;
             }
           }
 
-          // -----------------------------
-          // HELD
-          // -----------------------------
-
-          if (meatState === "held") {
-            this.meatAvailable = false;
-            this.cooking = false;
-            this.cookedMeat = false;
-
-            this.meat.setVisible(false);
-            this.meatLabel.setVisible(false);
-
-            this.clearCookedMeatObject();
-
-            if (state.meat.userId === user.id) {
-              this.heldItem =
-                state.meat.itemType === "cooked-meat"
-                  ? "cooked-meat"
-                  : "meat";
-            } else if (this.heldItem) {
-              this.heldItem = null;
-              this.destroyHeldMeat();
-            }
-          }
-
-          // -----------------------------
-          // COOKING
-          // -----------------------------
-
-          if (meatState === "cooking") {
-            this.meatAvailable = false;
-            this.cooking = true;
-            this.cookedMeat = false;
-
-            this.meat.setVisible(false);
-            this.meatLabel.setVisible(false);
-
-            this.clearCookedMeatObject();
-
-            this.setGrillText("Cooking...");
-          }
-
-          // -----------------------------
-          // COOKED
-          // -----------------------------
-
-          if (meatState === "cooked") {
-            this.meatAvailable = false;
-            this.cooking = false;
-            this.cookedMeat = true;
-            this.cookingPlayerId = null;
-
-            this.meat.setVisible(false);
-            this.meatLabel.setVisible(false);
-
-            this.showCookedMeat();
-
-            this.setGrillText("Cooked meat");
+          if (station) {
+            this.setStationState(station);
           }
         });
 
@@ -428,118 +507,123 @@ function Game() {
         });
 
         // =================================
-        // MEAT PICKED
+        // JOIN ROOM
         // =================================
 
-        socket.on("meat-picked", ({ userId }) => {
-          console.log("Meat picked by:", userId);
-
-          this.meatAvailable = false;
-          this.meat.setVisible(false);
-          this.meatLabel.setVisible(false);
-
-          if (userId === user.id) {
-            this.heldItem = "meat";
-          }
-        });
-
-        // =================================
-        // MEAT DROPPED
-        // =================================
-
-        socket.on("meat-dropped", ({ userId, x, y, itemType }) => {
-          console.log("Meat dropped:", itemType, x, y);
-
-          // Only the player who dropped it loses the item
-          if (!userId || userId === user.id) {
-            this.heldItem = null;
-            this.destroyHeldMeat();
-          }
-
-          // -------- RAW MEAT DROPPED --------
-
-          if (itemType === "raw-meat") {
-            this.meatAvailable = true;
-            this.cooking = false;
-            this.cookedMeat = false;
-
-            this.meat.setPosition(x, y);
-            this.meat.setFillStyle(0xc0392b);
-            this.meat.setVisible(true);
-            this.meatLabel.setVisible(true);
-
-            this.clearCookedMeatObject();
-
-            this.setGrillText("");
-
-            return;
-          }
-
-          // -------- COOKED MEAT DROPPED --------
-
-          if (itemType === "cooked-meat") {
-            this.meatAvailable = false;
-            this.cooking = false;
-            this.cookedMeat = true;
-
-            this.meat.setVisible(false);
-            this.meatLabel.setVisible(false);
-
-            this.clearCookedMeatObject();
-
-            this.cookedMeatObject = this.createCookedMeat(x, y);
-
-            this.setGrillText("");
-
-            return;
-          }
-        });
-
-        // =================================
-        // COOKING STARTED
-        // =================================
-
-        socket.on("cooking-started", ({ userId, duration }) => {
-          this.startCookingVisual(userId, duration);
-
-          if (userId === user.id) {
-            this.heldItem = null;
-            this.destroyHeldMeat();
-          }
-        });
-
-        // =================================
-        // COOKING FINISHED
-        // =================================
-
-        socket.on("cooking-finished", ({ userId }) => {
-          console.log("Cooking finished:", userId);
-
-          this.finishCookingVisual(userId);
-        });
-
-        // =================================
-        // COOKED MEAT PICKED
-        // =================================
-
-        socket.on("cooked-meat-picked", ({ userId }) => {
-          console.log("Cooked meat picked by:", userId);
-
-          this.cookedMeat = false;
-          this.cooking = false;
-
-          this.clearCookedMeatObject();
-
-          this.setGrillText("");
-
-          if (userId === user.id) {
-            this.heldItem = "cooked-meat";
-          }
+        socket.emit("join-room", {
+          roomCode,
+          userId: user.id,
         });
       }
 
       // =====================================
-      // HELPERS
+      // ITEM HELPERS
+      // =====================================
+
+      createItemVisual(itemData) {
+        if (!itemData?.id) {
+          return;
+        }
+
+        // Update existing item
+        if (this.items[itemData.id]) {
+          this.updateItemVisual(itemData);
+          return;
+        }
+
+        const color = itemColor(itemData.type, itemData.status);
+
+        const sprite = this.add
+          .circle(itemData.x, itemData.y, 15, color)
+          .setStrokeStyle(3, 0x4e2a0b)
+          .setDepth(6);
+
+        this.items[itemData.id] = {
+          id: itemData.id,
+          type: itemData.type,
+          state: itemData.state,
+          status: itemData.status || "raw",
+          stationId: itemData.stationId || null,
+          userId: itemData.userId,
+          x: itemData.x,
+          y: itemData.y,
+          sprite,
+        };
+
+        if (itemData.userId === user.id && itemData.state === "held") {
+          this.heldItemId = itemData.id;
+
+          sprite.setVisible(false);
+        }
+
+        this.updateItemVisual(itemData);
+      }
+
+      updateItemVisual(itemData) {
+        const item = this.items[itemData.id];
+
+        if (!item) {
+          return;
+        }
+
+        item.state = itemData.state;
+
+        item.userId = itemData.userId;
+
+        item.status = itemData.status || item.status || "raw";
+
+        item.stationId = itemData.stationId || null;
+
+        item.x = itemData.x;
+        item.y = itemData.y;
+
+        if (!item.sprite) {
+          return;
+        }
+
+        // Màu theo trạng thái: sống / chín / cháy
+        item.sprite.setFillStyle(itemColor(item.type, item.status));
+
+        // Held by current player
+        if (itemData.state === "held" && itemData.userId === user.id) {
+          item.sprite.setVisible(false);
+          return;
+        }
+
+        // Held by another player
+        if (itemData.state === "held") {
+          item.sprite.setVisible(false);
+          return;
+        }
+
+        // Available on floor
+        item.sprite.setVisible(true);
+
+        item.sprite.x = itemData.x;
+
+        item.sprite.y = itemData.y;
+      }
+
+      removeItemVisual(itemId) {
+        const item = this.items[itemId];
+
+        if (!item) {
+          return;
+        }
+
+        if (item.sprite) {
+          item.sprite.destroy();
+        }
+
+        delete this.items[itemId];
+
+        if (this.heldItemId === itemId) {
+          this.heldItemId = null;
+        }
+      }
+
+      // =====================================
+      // LABEL
       // =====================================
 
       makeLabel(x, y, text) {
@@ -550,7 +634,10 @@ function Game() {
             fontStyle: "bold",
             color: "#ffffff",
             backgroundColor: "#12302e",
-            padding: { x: 10, y: 4 },
+            padding: {
+              x: 10,
+              y: 4,
+            },
             resolution: TEXT_RES,
           })
           .setOrigin(0.5)
@@ -559,33 +646,12 @@ function Game() {
 
       setGrillText(text) {
         this.grillLabel.setText(text);
+
         this.grillLabel.setVisible(Boolean(text));
-      }
-
-      createCookedMeat(x, y) {
-        return this.add
-          .circle(x, y, 15, 0x8b4513)
-          .setStrokeStyle(3, 0x4e2a0b)
-          .setDepth(3);
-      }
-
-      clearCookedMeatObject() {
-        if (this.cookedMeatObject) {
-          this.cookedMeatObject.destroy();
-          this.cookedMeatObject = null;
-        }
-      }
-
-      destroyHeldMeat() {
-        if (this.heldMeat) {
-          this.heldMeat.destroy();
-          this.heldMeat = null;
-        }
       }
 
       // =====================================
       // HINT BUBBLE
-      // entries: [{ key: "E", label: "Pick up meat" }]
       // =====================================
 
       setHint(entries) {
@@ -603,7 +669,9 @@ function Game() {
 
         if (!entries || entries.length === 0) {
           this.hintContainer.setVisible(false);
+
           this.hintWidth = 0;
+
           return;
         }
 
@@ -624,6 +692,7 @@ function Game() {
               resolution: TEXT_RES,
             })
             .setOrigin(0.5),
+
           label: this.add
             .text(0, 0, e.label, {
               fontFamily: FONT,
@@ -643,7 +712,9 @@ function Game() {
         const bg = this.add.graphics();
 
         bg.fillStyle(0x12302e, 0.94);
+
         bg.fillRoundedRect(-total / 2, -h / 2, total, h, 12);
+
         bg.fillTriangle(-7, h / 2 - 1, 7, h / 2 - 1, 0, h / 2 + 7);
 
         this.hintContainer.add(bg);
@@ -652,11 +723,15 @@ function Game() {
 
         items.forEach((i) => {
           bg.fillStyle(0xa8743b, 1);
+
           bg.fillRoundedRect(x, -capH / 2 + 2, capW, capH, 6);
+
           bg.fillStyle(0xfff3d6, 1);
+
           bg.fillRoundedRect(x, -capH / 2, capW, capH, 6);
 
           i.key.setPosition(x + capW / 2, -1);
+
           i.label.setPosition(x + capW + labelGap, 0);
 
           this.hintContainer.add([i.key, i.label]);
@@ -665,74 +740,8 @@ function Game() {
         });
 
         this.hintWidth = total;
+
         this.hintContainer.setVisible(true);
-      }
-
-      // =====================================
-      // SHOW COOKED MEAT (on the grill)
-      // =====================================
-
-      showCookedMeat() {
-        if (this.cookedMeatObject) {
-          return;
-        }
-
-        this.cookedMeatObject = this.createCookedMeat(this.grill.x, this.grill.y);
-      }
-
-      hideMeat() {
-        this.meatAvailable = false;
-        this.meat.setVisible(false);
-        this.meatLabel.setVisible(false);
-      }
-
-      // =====================================
-      // COOKING VISUALS
-      // =====================================
-
-      startCookingVisual(userId, duration) {
-        this.cooking = true;
-        this.cookedMeat = false;
-        this.cookingPlayerId = userId;
-
-        this.hideMeat();
-
-        this.clearCookedMeatObject();
-
-        let remaining = Math.ceil(duration / 1000);
-
-        this.setGrillText(`Cooking: ${remaining}s`);
-
-        if (this.localCookingTimer) {
-          this.localCookingTimer.remove();
-        }
-
-        this.localCookingTimer = this.time.addEvent({
-          delay: 1000,
-          repeat: remaining - 1,
-          callback: () => {
-            remaining--;
-
-            if (remaining > 0) {
-              this.setGrillText(`Cooking: ${remaining}s`);
-            }
-          },
-        });
-      }
-
-      finishCookingVisual(userId) {
-        this.cooking = false;
-        this.cookedMeat = true;
-        this.cookingPlayerId = null;
-
-        if (this.localCookingTimer) {
-          this.localCookingTimer.remove();
-          this.localCookingTimer = null;
-        }
-
-        this.setGrillText("Cooked meat");
-
-        this.showCookedMeat();
       }
 
       // =====================================
@@ -784,59 +793,298 @@ function Game() {
       // ACTIONS
       // =====================================
 
-      pickMeat() {
-        if (!this.meatAvailable) {
+      takeMeatFromShelf() {
+        console.log("===== TAKE MEAT START =====");
+
+        if (!this.player) {
+          console.log("NO PLAYER");
           return;
         }
 
-        if (this.heldItem) {
+        console.log("PLAYER:", this.player.x, this.player.y);
+        console.log("SHELF:", this.meatShelf.x, this.meatShelf.y);
+
+        const distance = Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          this.meatShelf.x,
+          this.meatShelf.y,
+        );
+
+        console.log("DISTANCE:", distance);
+
+        if (distance > 90) {
+          console.log("TOO FAR");
           return;
         }
 
-        socket.emit("pick-meat", {
+        if (this.heldItemId) {
+          console.log("ALREADY HOLDING:", this.heldItemId);
+          return;
+        }
+
+        console.log("SENDING TAKE INGREDIENT");
+        console.log("SOCKET CONNECTED:", socket.connected);
+        console.log("SOCKET ID:", socket.id);
+
+        socket.emit("take-ingredient", {
           roomCode,
           userId: user.id,
+          shelfId: "meat-shelf",
+          playerX: this.player.x,
+          playerY: this.player.y,
         });
       }
 
-      dropItem() {
-        if (!this.heldItem) {
+      findNearbyItem() {
+        if (!this.player) {
+          return null;
+        }
+
+        // Phải nhỏ hơn hoặc bằng PICKUP_RANGE của server (60)
+        const PICKUP_RANGE = 60;
+
+        let closest = null;
+        let closestDistance = Infinity;
+
+        Object.values(this.items).forEach((item) => {
+          if (item.state !== "available") {
+            return;
+          }
+
+          const distance = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            item.x,
+            item.y,
+          );
+
+          if (distance <= PICKUP_RANGE && distance < closestDistance) {
+            closest = item;
+            closestDistance = distance;
+          }
+        });
+
+        return closest;
+      }
+
+      pickUpItem(itemId) {
+        if (!itemId || this.heldItemId) {
           return;
         }
 
-        socket.emit("drop-meat", {
+        socket.emit("pick-up-item", {
           roomCode,
           userId: user.id,
+          itemId,
+          playerX: this.player.x,
+          playerY: this.player.y,
+        });
+      }
+
+      setStationState(stationData) {
+        if (!stationData?.id) {
+          return;
+        }
+
+        this.stations[stationData.id] = {
+          id: stationData.id,
+          itemId: stationData.itemId || null,
+          cookTime: stationData.cookTime || 5000,
+          burnTime: stationData.burnTime || 10000,
+          elapsedMs: stationData.elapsedMs || 0,
+          receivedAt: Date.now(),
+        };
+      }
+
+      distanceTo(x, y) {
+        return Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
+      }
+
+      // Đang cầm thịt sống, gần grill và grill còn trống
+      canPlaceOnGrill() {
+        if (!this.player || !this.heldItemId) {
+          return false;
+        }
+
+        const heldItem = this.items[this.heldItemId];
+
+        const station = this.stations[GRILL.id];
+
+        if (
+          !heldItem ||
+          heldItem.type !== "meat" ||
+          heldItem.status !== "raw"
+        ) {
+          return false;
+        }
+
+        if (station && station.itemId) {
+          return false;
+        }
+
+        return this.distanceTo(GRILL.x, GRILL.y) <= INTERACT_RANGE;
+      }
+
+      // Tay trống, gần grill và grill đang có món
+      canTakeFromGrill() {
+        if (!this.player || this.heldItemId) {
+          return false;
+        }
+
+        const station = this.stations[GRILL.id];
+
+        if (!station || !station.itemId) {
+          return false;
+        }
+
+        return this.distanceTo(GRILL.x, GRILL.y) <= INTERACT_RANGE;
+      }
+
+      // Xử lý phím E theo thứ tự ưu tiên
+      handleInteract() {
+        if (!this.player) {
+          return;
+        }
+
+        // 1. Đang cầm item: đặt lên trạm nếu hợp lệ
+        if (this.heldItemId) {
+          if (this.canPlaceOnGrill()) {
+            this.placeOnStation(GRILL.id);
+          }
+
+          return;
+        }
+
+        // 2. Nhặt item rơi dưới đất
+        const nearbyItem = this.findNearbyItem();
+
+        if (nearbyItem) {
+          this.pickUpItem(nearbyItem.id);
+          return;
+        }
+
+        // 3. Lấy món từ grill
+        if (this.canTakeFromGrill()) {
+          this.takeFromStation(GRILL.id);
+          return;
+        }
+
+        // 4. Lấy thịt từ shelf
+        this.takeMeatFromShelf();
+      }
+
+      placeOnStation(stationId) {
+        if (!this.heldItemId) {
+          return;
+        }
+
+        socket.emit("place-on-station", {
+          roomCode,
+          userId: user.id,
+          stationId,
+          itemId: this.heldItemId,
+          playerX: this.player.x,
+          playerY: this.player.y,
+        });
+      }
+
+      takeFromStation(stationId) {
+        if (this.heldItemId) {
+          return;
+        }
+
+        socket.emit("take-from-station", {
+          roomCode,
+          userId: user.id,
+          stationId,
+          playerX: this.player.x,
+          playerY: this.player.y,
+        });
+      }
+
+      // Vẽ thanh tiến độ + chữ trạng thái của grill
+      updateGrillView() {
+        if (!this.grillBar) {
+          return;
+        }
+
+        this.grillBar.clear();
+
+        const station = this.stations[GRILL.id];
+
+        const item =
+          station && station.itemId ? this.items[station.itemId] : null;
+
+        if (!station || !item) {
+          this.setGrillText("");
+
+          return;
+        }
+
+        const elapsed = station.elapsedMs + (Date.now() - station.receivedAt);
+
+        let progress = 0;
+        let color = 0x22c55e;
+        let text = "Cooking...";
+
+        if (item.status === "burnt") {
+          progress = 1;
+          color = 0x111827;
+          text = "Burnt!";
+        } else if (item.status === "cooked") {
+          // Thanh cam: còn bao lâu nữa thì cháy
+          progress = Phaser.Math.Clamp(
+            (elapsed - station.cookTime) /
+              (station.burnTime - station.cookTime),
+            0,
+            1,
+          );
+          color = 0xf59e0b;
+          text = "Cooked! Take it out";
+        } else {
+          progress = Phaser.Math.Clamp(elapsed / station.cookTime, 0, 1);
+        }
+
+        const barW = 100;
+        const barH = 10;
+        const barX = GRILL.x - barW / 2;
+        const barY = GRILL.y - 42;
+
+        this.grillBar.fillStyle(0x000000, 0.55);
+        this.grillBar.fillRoundedRect(
+          barX - 2,
+          barY - 2,
+          barW + 4,
+          barH + 4,
+          4,
+        );
+
+        this.grillBar.fillStyle(color, 1);
+        this.grillBar.fillRect(barX, barY, barW * progress, barH);
+
+        if (this.grillLabel.text !== text) {
+          this.setGrillText(text);
+        }
+      }
+
+      dropItem() {
+        if (!this.heldItemId) {
+          return;
+        }
+
+        socket.emit("drop-item", {
+          roomCode,
+          userId: user.id,
+          itemId: this.heldItemId,
           x: this.player.x,
           y: this.player.y,
         });
       }
 
-      startCooking() {
-        if (this.heldItem !== "meat") {
-          return;
-        }
-
-        socket.emit("start-cooking", {
-          roomCode,
-          userId: user.id,
-        });
-      }
-
-      pickCookedMeat() {
-        if (!this.cookedMeat) {
-          return;
-        }
-
-        if (this.heldItem) {
-          return;
-        }
-
-        socket.emit("pick-cooked-meat", {
-          roomCode,
-          userId: user.id,
-        });
-      }
+      // =====================================
+      // POSITION
+      // =====================================
 
       sendPosition() {
         if (!socket.connected) {
@@ -844,6 +1092,7 @@ function Game() {
         }
 
         const x = Math.round(this.player.x);
+
         const y = Math.round(this.player.y);
 
         if (x === this.lastSentX && y === this.lastSentY) {
@@ -888,6 +1137,7 @@ function Game() {
           this.player.x += speed;
         }
 
+        // World bounds
         this.player.x = Phaser.Math.Clamp(
           this.player.x,
           40,
@@ -900,12 +1150,17 @@ function Game() {
           this.scale.height - 40,
         );
 
+        // Player label
         this.playerLabel.x = this.player.x;
+
         this.playerLabel.y = this.player.y - 34;
 
+        // Player shadow
         this.playerShadow.x = this.player.x;
+
         this.playerShadow.y = this.player.y + 24;
 
+        // Send multiplayer position
         this.sendPosition();
 
         // =================================
@@ -914,94 +1169,119 @@ function Game() {
 
         let hint = null;
 
-        if (this.heldItem) {
+        // ---------------------------------
+        // PLAYER IS HOLDING ITEM
+        // ---------------------------------
+
+        if (this.heldItemId) {
+          const heldItem = this.items[this.heldItemId];
+
           // Q = drop
           if (Phaser.Input.Keyboard.JustDown(this.dropKey)) {
             this.dropItem();
           }
 
-          if (this.heldItem === "meat") {
-            const distanceToGrill = Phaser.Math.Distance.Between(
-              this.player.x,
-              this.player.y,
-              this.grill.x,
-              this.grill.y,
-            );
+          hint = [];
 
-            if (distanceToGrill < 90) {
-              hint = [
-                { key: "E", label: "Grill meat" },
-                { key: "Q", label: "Drop" },
-              ];
+          if (this.canPlaceOnGrill()) {
+            hint.push({
+              key: "E",
+              label: "Cook meat",
+            });
+          }
 
-              if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-                this.startCooking();
-              }
-            } else {
-              hint = [{ key: "Q", label: "Drop meat" }];
+          hint.push({
+            key: "Q",
+            label: "Drop meat",
+          });
+
+          // Held item follows player
+          if (heldItem) {
+            const color = itemColor(heldItem.type, heldItem.status);
+
+            if (heldItem.sprite) {
+              heldItem.sprite.setVisible(false);
             }
-          } else if (this.heldItem === "cooked-meat") {
-            hint = [{ key: "Q", label: "Drop cooked meat" }];
+
+            // Draw held item
+            if (!this.heldItemVisual) {
+              this.heldItemVisual = this.add
+                .circle(this.player.x, this.player.y - 25, 10, color)
+                .setStrokeStyle(2, 0x3b1a0a)
+                .setDepth(6);
+            }
+
+            this.heldItemVisual.setFillStyle(color);
+
+            this.heldItemVisual.x = this.player.x;
+
+            this.heldItemVisual.y = this.player.y - 25;
+          }
+        }
+
+        // ---------------------------------
+        // PLAYER IS NOT HOLDING ITEM
+        // ---------------------------------
+        else {
+          // Hide held visual
+          if (this.heldItemVisual) {
+            this.heldItemVisual.destroy();
+
+            this.heldItemVisual = null;
           }
 
-          // Held item follows the player
-          const heldColor = this.heldItem === "meat" ? 0xc0392b : 0x8b4513;
+          // --------------------------------
+          // MEAT SHELF
+          // --------------------------------
 
-          if (!this.heldMeat) {
-            this.heldMeat = this.add
-              .circle(this.player.x, this.player.y - 25, 10, heldColor)
-              .setStrokeStyle(2, 0x3b1a0a)
-              .setDepth(6);
-          }
-
-          this.heldMeat.setFillStyle(heldColor);
-          this.heldMeat.x = this.player.x;
-          this.heldMeat.y = this.player.y - 25;
-        } else if (this.cooking) {
-          hint = null;
-        } else if (this.cookedMeat) {
-          let cookedX = this.grill.x;
-          let cookedY = this.grill.y;
-
-          if (this.cookedMeatObject) {
-            cookedX = this.cookedMeatObject.x;
-            cookedY = this.cookedMeatObject.y;
-          }
-
-          const distanceToCookedMeat = Phaser.Math.Distance.Between(
+          const distanceToShelf = Phaser.Math.Distance.Between(
             this.player.x,
             this.player.y,
-            cookedX,
-            cookedY,
+            this.meatShelf.x,
+            this.meatShelf.y,
           );
 
-          if (distanceToCookedMeat < 70) {
-            hint = [{ key: "E", label: "Pick up cooked meat" }];
-
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-              this.pickCookedMeat();
-            }
+          if (distanceToShelf < 90) {
+            hint = [
+              {
+                key: "E",
+                label: "Take meat",
+              },
+            ];
           }
-        } else if (this.meatAvailable) {
-          const distanceToMeat = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            this.meat.x,
-            this.meat.y,
-          );
 
-          if (distanceToMeat < 70) {
-            hint = [{ key: "E", label: "Pick up meat" }];
+          // --------------------------------
+          // GRILL
+          // --------------------------------
 
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-              this.pickMeat();
-            }
+          if (this.canTakeFromGrill()) {
+            const grillStation = this.stations[GRILL.id];
+
+            const grillItem = this.items[grillStation.itemId];
+
+            const status = grillItem ? grillItem.status : "raw";
+
+            const label =
+              status === "cooked"
+                ? "Take cooked meat"
+                : status === "burnt"
+                  ? "Take burnt meat"
+                  : "Take raw meat";
+
+            hint = [
+              {
+                key: "E",
+                label,
+              },
+            ];
           }
         }
 
         // =================================
-        // HINT BUBBLE POSITION
+        // HINT POSITION
         // =================================
+
+        this.updateGrillView();
 
         this.setHint(hint);
 
@@ -1049,13 +1329,12 @@ function Game() {
 
     return () => {
       socket.off("game-state");
+      socket.off("item-created");
+      socket.off("item-picked");
+      socket.off("station-updated");
+      socket.off("item-dropped");
       socket.off("player-position");
       socket.off("player-joined");
-      socket.off("meat-picked");
-      socket.off("meat-dropped");
-      socket.off("cooking-started");
-      socket.off("cooking-finished");
-      socket.off("cooked-meat-picked");
 
       socket.disconnect();
 
@@ -1074,7 +1353,7 @@ function Game() {
   }
 
   // =====================================
-  // GAME
+  // GAME UI
   // =====================================
 
   return (
@@ -1086,11 +1365,13 @@ function Game() {
       <header className="hud-top">
         <div className="hud-panel hud-brand">
           <h1>Kitchen Panic</h1>
+
           <span className="hud-room">Room {roomCode}</span>
         </div>
 
         <div className="hud-panel hud-score">
           <span className="hud-score-label">Score</span>
+
           <strong>0</strong>
         </div>
 
@@ -1123,6 +1404,7 @@ function Game() {
 
                 <div className="ticket-meta">
                   <span>{recipe.base_score} pts</span>
+
                   <span>{recipe.time_limit}s</span>
                 </div>
 
@@ -1138,7 +1420,9 @@ function Game() {
       {/* Player */}
       <div className="hud-panel hud-player">
         <span className="hud-player-name">{user?.email}</span>
+
         <span>Score 0</span>
+
         <span>Coins 0</span>
       </div>
 
