@@ -41,7 +41,7 @@ function Lobby() {
 
       return matchData;
     } catch (err) {
-      console.error(err);
+      console.error("Load match error:", err);
       setError(err.message);
       return null;
     }
@@ -53,6 +53,7 @@ function Lobby() {
 
   useEffect(() => {
     let mounted = true;
+    let pollTimer = null;
 
     const init = async () => {
       try {
@@ -110,7 +111,7 @@ function Lobby() {
         }
 
         // ================================
-        // CONNECT SOCKET
+        // SOCKET CONNECT
         // ================================
 
         if (!socket.connected) {
@@ -118,26 +119,26 @@ function Lobby() {
         }
 
         // ================================
-        // JOIN ROOM
-        // ================================
-
-        socket.emit("join-room", {
-          roomCode,
-          userId: user.id,
-        });
-
-        // ================================
         // PLAYER JOINED
         // ================================
 
-        const handlePlayerJoined = async () => {
-          console.log("Player joined");
+        const handlePlayerJoined = async ({ userId }) => {
+          console.log("Player joined:", userId);
 
           const updatedMatch = await getMatch(roomCode);
 
           if (!mounted) return;
 
-          setMatch(updatedMatch.data);
+          const updatedData = updatedMatch.data;
+
+          setMatch(updatedData);
+
+          // Safety check
+          if (updatedData.status === "PLAYING") {
+            navigate(`/game/${roomCode}`, {
+              replace: true,
+            });
+          }
         };
 
         // ================================
@@ -171,7 +172,7 @@ function Lobby() {
 
           // Update own ready state
           if (userId === user.id) {
-            setReadyState(ready);
+            setReadyState(Boolean(ready));
           }
         };
 
@@ -182,16 +183,74 @@ function Lobby() {
         const handleGameStarted = ({ roomCode: startedRoom }) => {
           console.log("Game started:", startedRoom);
 
-          if (startedRoom === roomCode) {
+          if (
+            String(startedRoom).toUpperCase() === String(roomCode).toUpperCase()
+          ) {
             goToGame();
           }
         };
+
+        // ================================
+        // REGISTER SOCKET LISTENERS
+        // BEFORE JOINING ROOM
+        // ================================
 
         socket.on("player-joined", handlePlayerJoined);
 
         socket.on("player-ready", handlePlayerReady);
 
         socket.on("game-started", handleGameStarted);
+
+        // ================================
+        // JOIN ROOM
+        // ================================
+
+        socket.emit("join-room", {
+          roomCode,
+          userId: user.id,
+        });
+
+        // ================================
+        // DATABASE POLLING
+        // ================================
+        //
+        // This is the important part.
+        //
+        // Even if player 2 misses the
+        // "game-started" socket event,
+        // the lobby will detect:
+        //
+        // WAITING -> PLAYING
+        //
+        // and automatically enter the game.
+        // ================================
+
+        pollTimer = setInterval(async () => {
+          try {
+            const latestResult = await getMatch(roomCode);
+
+            if (!mounted) return;
+
+            const latestMatch = latestResult.data;
+
+            setMatch(latestMatch);
+
+            // ============================
+            // GAME STARTED
+            // ============================
+
+            if (latestMatch.status === "PLAYING") {
+              clearInterval(pollTimer);
+              pollTimer = null;
+
+              navigate(`/game/${roomCode}`, {
+                replace: true,
+              });
+            }
+          } catch (err) {
+            console.error("Lobby polling error:", err);
+          }
+        }, 1000);
 
         // ================================
         // CLEANUP
@@ -203,9 +262,13 @@ function Lobby() {
           socket.off("player-ready", handlePlayerReady);
 
           socket.off("game-started", handleGameStarted);
+
+          if (pollTimer) {
+            clearInterval(pollTimer);
+          }
         };
       } catch (err) {
-        console.error(err);
+        console.error("Lobby initialization error:", err);
 
         if (mounted) {
           setError(err.message);
@@ -221,6 +284,10 @@ function Lobby() {
 
     return () => {
       mounted = false;
+
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
 
       socket.disconnect();
     };
@@ -238,20 +305,29 @@ function Lobby() {
 
       const newReady = !ready;
 
-      // Update database
+      // ================================
+      // UPDATE DATABASE
+      // ================================
+
       await setReady(roomCode, user.id, newReady);
 
-      // Update own UI immediately
+      // ================================
+      // UPDATE OWN UI
+      // ================================
+
       setReadyState(newReady);
 
-      // Notify all players
+      // ================================
+      // NOTIFY OTHER PLAYERS
+      // ================================
+
       socket.emit("player-ready", {
         roomCode,
         userId: user.id,
         ready: newReady,
       });
     } catch (err) {
-      console.error(err);
+      console.error("Ready error:", err);
       setError(err.message);
     }
   };
@@ -266,17 +342,27 @@ function Lobby() {
 
       setError("");
 
+      // ================================
+      // START MATCH IN DATABASE
+      // ================================
+
       await startMatch(roomCode, user.id);
 
-      // Notify everyone
+      // ================================
+      // NOTIFY PLAYERS THROUGH SOCKET
+      // ================================
+
       socket.emit("game-started", {
         roomCode,
       });
 
-      // Host goes directly
+      // ================================
+      // HOST GOES DIRECTLY
+      // ================================
+
       goToGame();
     } catch (err) {
-      console.error(err);
+      console.error("Start game error:", err);
       setError(err.message);
     }
   };
