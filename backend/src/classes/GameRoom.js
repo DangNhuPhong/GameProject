@@ -1,5 +1,6 @@
 import Item from "./Item.js";
 import IngredientShelf from "./IngredientShelf.js";
+import CookingStation from "./CookingStation.js";
 
 class GameRoom {
   constructor(roomCode) {
@@ -17,10 +18,26 @@ class GameRoom {
         y: 150,
       }),
     ];
+
+    // Các trạm làm việc. Sau này thêm CuttingStation,
+    // WashingStation... chỉ cần push vào mảng này.
+    this.stations = [
+      new CookingStation({
+        id: "grill",
+        x: 450,
+        y: 150,
+        cookTime: 5000, // 5 giây thì chín
+        burnTime: 10000, // 10 giây thì cháy
+      }),
+    ];
   }
 
   getShelf(shelfId) {
     return this.shelves.find((shelf) => shelf.id === shelfId);
+  }
+
+  getStation(stationId) {
+    return this.stations.find((station) => station.id === stationId);
   }
 
   createItemFromShelf(shelfId, userId) {
@@ -66,18 +83,18 @@ class GameRoom {
     return true;
   }
 
+  // Gọi định kỳ từ server. Trả về danh sách trạm vừa thay đổi.
+  update() {
+    const now = Date.now();
+
+    return this.stations.filter((station) => station.update(now));
+  }
+
   getState() {
     return {
       roomCode: this.roomCode,
 
-      items: this.items.map((item) => ({
-        id: item.id,
-        type: item.type,
-        state: item.state,
-        x: item.x,
-        y: item.y,
-        userId: item.userId,
-      })),
+      items: this.items.map((item) => item.serialize()),
 
       shelves: this.shelves.map((shelf) => ({
         id: shelf.id,
@@ -85,6 +102,8 @@ class GameRoom {
         x: shelf.x,
         y: shelf.y,
       })),
+
+      stations: this.stations.map((station) => station.getState()),
     };
   }
 }

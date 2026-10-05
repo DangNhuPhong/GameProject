@@ -203,14 +203,7 @@ io.on("connection", (socket) => {
       console.log(`${userId} took ${item.type} (${item.id})`);
 
       io.to(normalizedRoomCode).emit("item-created", {
-        item: {
-          id: item.id,
-          type: item.type,
-          state: item.state,
-          x: item.x,
-          y: item.y,
-          userId: item.userId,
-        },
+        item: item.serialize(),
       });
     },
   );
@@ -321,14 +314,7 @@ io.on("connection", (socket) => {
       // ==========================================
 
       io.to(normalizedRoomCode).emit("item-picked", {
-        item: {
-          id: item.id,
-          type: item.type,
-          state: item.state,
-          x: item.x,
-          y: item.y,
-          userId: item.userId,
-        },
+        item: item.serialize(),
       });
     },
   );
@@ -387,16 +373,129 @@ io.on("connection", (socket) => {
     console.log(`${userId} dropped ${item.type} (${item.id})`);
 
     io.to(normalizedRoomCode).emit("item-dropped", {
-      item: {
-        id: item.id,
-        type: item.type,
-        state: item.state,
-        x: item.x,
-        y: item.y,
-        userId: item.userId,
-      },
+      item: item.serialize(),
     });
   });
+
+  // ==========================================
+  // PLACE ITEM ON STATION (Grill, ...)
+  // ==========================================
+
+  socket.on(
+    "place-on-station",
+    ({ roomCode, userId, stationId, itemId, playerX, playerY }) => {
+      if (
+        !roomCode ||
+        !userId ||
+        !stationId ||
+        !itemId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        return;
+      }
+
+      const normalizedRoomCode = String(roomCode).toUpperCase();
+
+      const gameRoom = getGameRoom(normalizedRoomCode);
+
+      const station = gameRoom.getStation(stationId);
+
+      if (!station) {
+        console.log(`Station not found: ${stationId}`);
+
+        return;
+      }
+
+      if (!station.canUse(playerX, playerY)) {
+        console.log(`${userId} is too far from ${stationId}`);
+
+        return;
+      }
+
+      const item = gameRoom.getItem(itemId);
+
+      // Chỉ người đang cầm item mới đặt được
+      if (!item || item.state !== "held" || item.userId !== userId) {
+        console.log(`${userId} is not holding item ${itemId}`);
+
+        return;
+      }
+
+      if (!station.placeItem(item)) {
+        console.log(`Station ${stationId} cannot accept ${item.type}`);
+
+        return;
+      }
+
+      console.log(`${userId} placed ${item.type} on ${stationId}`);
+
+      io.to(normalizedRoomCode).emit("station-updated", {
+        station: station.getState(),
+        item: item.serialize(),
+      });
+    },
+  );
+
+  // ==========================================
+  // TAKE ITEM FROM STATION
+  // ==========================================
+
+  socket.on(
+    "take-from-station",
+    ({ roomCode, userId, stationId, playerX, playerY }) => {
+      if (
+        !roomCode ||
+        !userId ||
+        !stationId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        return;
+      }
+
+      const normalizedRoomCode = String(roomCode).toUpperCase();
+
+      const gameRoom = getGameRoom(normalizedRoomCode);
+
+      const station = gameRoom.getStation(stationId);
+
+      if (!station || !station.hasItem()) {
+        return;
+      }
+
+      if (!station.canUse(playerX, playerY)) {
+        console.log(`${userId} is too far from ${stationId}`);
+
+        return;
+      }
+
+      const alreadyHolding = gameRoom.items.some(
+        (item) => item.state === "held" && item.userId === userId,
+      );
+
+      if (alreadyHolding) {
+        console.log(`${userId} is already holding an item`);
+
+        return;
+      }
+
+      const item = station.takeItem(userId);
+
+      if (!item) {
+        return;
+      }
+
+      console.log(
+        `${userId} took ${item.type} (${item.status}) from ${stationId}`,
+      );
+
+      io.to(normalizedRoomCode).emit("station-updated", {
+        station: station.getState(),
+        item: item.serialize(),
+      });
+    },
+  );
 
   // ==========================================
   // DISCONNECT
@@ -429,6 +528,23 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("game-state", gameRoom.getState());
   });
 });
+
+// ==========================================
+// STATION TICK (nướng chín / cháy...)
+// ==========================================
+
+setInterval(() => {
+  for (const gameRoom of Object.values(gameRooms)) {
+    const changedStations = gameRoom.update();
+
+    for (const station of changedStations) {
+      io.to(gameRoom.roomCode).emit("station-updated", {
+        station: station.getState(),
+        item: station.item ? station.item.serialize() : null,
+      });
+    }
+  }
+}, 200);
 
 // ==========================================
 // START SERVER
