@@ -36,10 +36,7 @@ function getGameRoom(roomCode) {
 // ==========================================
 
 io.on("connection", (socket) => {
-  console.log("🔥 SOCKET CONNECTION:", socket.id);
-  console.log("==========================================");
   console.log("Client connected:", socket.id);
-  console.log("==========================================");
 
   // ==========================================
   // JOIN ROOM
@@ -47,7 +44,6 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", ({ roomCode, userId }) => {
     if (!roomCode || !userId) {
-      console.log("Invalid join-room data");
       return;
     }
 
@@ -63,7 +59,6 @@ io.on("connection", (socket) => {
 
     console.log(`User ${userId} joined room ${normalizedRoomCode}`);
 
-    // Send current game state
     socket.emit("game-state", gameRoom.getState());
 
     socket.emit("room-joined", {
@@ -71,7 +66,6 @@ io.on("connection", (socket) => {
       userId,
     });
 
-    // Tell other players
     socket.to(normalizedRoomCode).emit("player-joined", {
       userId,
     });
@@ -144,10 +138,7 @@ io.on("connection", (socket) => {
   socket.on(
     "take-ingredient",
     ({ roomCode, userId, shelfId, playerX, playerY }) => {
-      console.log("");
-      console.log("==========================================");
       console.log("===== TAKE INGREDIENT RECEIVED =====");
-      console.log("==========================================");
 
       console.log({
         roomCode,
@@ -157,10 +148,6 @@ io.on("connection", (socket) => {
         playerY,
       });
 
-      // ==========================================
-      // VALIDATE DATA
-      // ==========================================
-
       if (
         !roomCode ||
         !userId ||
@@ -168,30 +155,16 @@ io.on("connection", (socket) => {
         typeof playerX !== "number" ||
         typeof playerY !== "number"
       ) {
-        console.log("INVALID TAKE INGREDIENT DATA");
+        console.log("Invalid take-ingredient data");
 
         return;
       }
 
       const normalizedRoomCode = String(roomCode).toUpperCase();
 
-      console.log("Normalized room:", normalizedRoomCode);
-
-      // ==========================================
-      // GET GAME ROOM
-      // ==========================================
-
       const gameRoom = getGameRoom(normalizedRoomCode);
 
-      console.log("Game room:", gameRoom.roomCode);
-
-      // ==========================================
-      // GET SHELF
-      // ==========================================
-
       const shelf = gameRoom.getShelf(shelfId);
-
-      console.log("Shelf:", shelf);
 
       if (!shelf) {
         console.log(`Shelf not found: ${shelfId}`);
@@ -199,13 +172,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // ==========================================
-      // CHECK DISTANCE
-      // ==========================================
-
-      const canTake = shelf.canTake(playerX, playerY);
-
-      console.log("Can take:", canTake);
+      const canTake = shelf.canTake(playerX, playerY, 90);
 
       if (!canTake) {
         console.log(`${userId} is too far from ${shelfId}`);
@@ -213,31 +180,27 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // ==========================================
-      // CREATE ITEM
-      // ==========================================
+      // Prevent player from creating
+      // another item while already holding one.
+      const alreadyHolding = gameRoom.items.some(
+        (item) => item.state === "held" && item.userId === userId,
+      );
 
-      console.log("Creating item from shelf...");
-
-      const item = gameRoom.createItemFromShelf(shelfId, userId);
-
-      console.log("Created item:", item);
-
-      if (!item) {
-        console.log("FAILED TO CREATE ITEM");
+      if (alreadyHolding) {
+        console.log(`${userId} is already holding an item`);
 
         return;
       }
 
-      // ==========================================
-      // ITEM CREATED
-      // ==========================================
+      const item = gameRoom.createItemFromShelf(shelfId, userId);
+
+      if (!item) {
+        console.log("Failed to create item");
+
+        return;
+      }
 
       console.log(`${userId} took ${item.type} (${item.id})`);
-
-      // ==========================================
-      // SEND ITEM TO ALL PLAYERS
-      // ==========================================
 
       io.to(normalizedRoomCode).emit("item-created", {
         item: {
@@ -249,11 +212,124 @@ io.on("connection", (socket) => {
           userId: item.userId,
         },
       });
+    },
+  );
 
-      console.log("item-created event emitted");
+  // ==========================================
+  // PICK UP DROPPED ITEM
+  // ==========================================
 
-      console.log("==========================================");
-      console.log("");
+  socket.on(
+    "pick-up-item",
+    ({ roomCode, userId, itemId, playerX, playerY }) => {
+      console.log("===== PICK UP ITEM RECEIVED =====");
+
+      console.log({
+        roomCode,
+        userId,
+        itemId,
+        playerX,
+        playerY,
+      });
+
+      if (
+        !roomCode ||
+        !userId ||
+        !itemId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        console.log("Invalid pick-up-item data");
+
+        return;
+      }
+
+      const normalizedRoomCode = String(roomCode).toUpperCase();
+
+      const gameRoom = getGameRoom(normalizedRoomCode);
+
+      // ==========================================
+      // CHECK CURRENT PLAYER ALREADY HOLDS ITEM
+      // ==========================================
+
+      const alreadyHolding = gameRoom.items.some(
+        (item) => item.state === "held" && item.userId === userId,
+      );
+
+      if (alreadyHolding) {
+        console.log(`${userId} is already holding an item`);
+
+        return;
+      }
+
+      // ==========================================
+      // GET ITEM
+      // ==========================================
+
+      const item = gameRoom.getItem(itemId);
+
+      if (!item) {
+        console.log(`Item not found: ${itemId}`);
+
+        return;
+      }
+
+      // ==========================================
+      // ITEM MUST BE AVAILABLE
+      // ==========================================
+
+      if (item.state !== "available") {
+        console.log(`Item ${itemId} is not available`);
+
+        return;
+      }
+
+      // ==========================================
+      // CHECK DISTANCE
+      // ==========================================
+
+      const distance = Math.sqrt(
+        Math.pow(playerX - item.x, 2) + Math.pow(playerY - item.y, 2),
+      );
+
+      console.log("Distance to item:", distance);
+
+      const PICKUP_RANGE = 60;
+
+      if (distance > PICKUP_RANGE) {
+        console.log(`${userId} is too far from item ${itemId}`);
+
+        return;
+      }
+
+      // ==========================================
+      // PICK ITEM
+      // ==========================================
+
+      const picked = item.pick(userId);
+
+      if (!picked) {
+        console.log(`Failed to pick item ${itemId}`);
+
+        return;
+      }
+
+      console.log(`${userId} picked ${item.type} (${item.id})`);
+
+      // ==========================================
+      // BROADCAST
+      // ==========================================
+
+      io.to(normalizedRoomCode).emit("item-picked", {
+        item: {
+          id: item.id,
+          type: item.type,
+          state: item.state,
+          x: item.x,
+          y: item.y,
+          userId: item.userId,
+        },
+      });
     },
   );
 
@@ -262,6 +338,16 @@ io.on("connection", (socket) => {
   // ==========================================
 
   socket.on("drop-item", ({ roomCode, userId, itemId, x, y }) => {
+    console.log("===== DROP ITEM RECEIVED =====");
+
+    console.log({
+      roomCode,
+      userId,
+      itemId,
+      x,
+      y,
+    });
+
     if (!roomCode || !userId || !itemId) {
       return;
     }
@@ -278,16 +364,22 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const dropped = item.drop(
-      userId,
+    // Only the player holding
+    // the item can drop it.
+    if (item.state !== "held" || item.userId !== userId) {
+      console.log(`${userId} cannot drop item ${itemId}`);
 
-      typeof x === "number" ? x : item.x,
+      return;
+    }
 
-      typeof y === "number" ? y : item.y,
-    );
+    const dropX = typeof x === "number" ? x : item.x;
+
+    const dropY = typeof y === "number" ? y : item.y;
+
+    const dropped = item.drop(userId, dropX, dropY);
 
     if (!dropped) {
-      console.log(`Failed to drop item: ${itemId}`);
+      console.log(`Failed to drop item ${itemId}`);
 
       return;
     }
@@ -323,10 +415,8 @@ io.on("connection", (socket) => {
 
     const gameRoom = getGameRoom(roomCode);
 
-    // ==========================================
-    // RELEASE HELD ITEMS
-    // ==========================================
-
+    // Release items held by
+    // disconnected player.
     for (const item of gameRoom.items) {
       if (item.state === "held" && item.userId === userId) {
         item.state = "available";
@@ -335,10 +425,6 @@ io.on("connection", (socket) => {
         console.log(`Released ${item.type} (${item.id}) after disconnect`);
       }
     }
-
-    // ==========================================
-    // SEND UPDATED STATE
-    // ==========================================
 
     io.to(roomCode).emit("game-state", gameRoom.getState());
   });
