@@ -1,9 +1,8 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
-
-dotenv.config();
+import GameRoom from "./classes/GameRoom.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -12,40 +11,24 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PATCH"],
   },
 });
 
 // ==========================================
-// GAME STATE
+// GAME ROOMS
 // ==========================================
 
-const roomStates = {};
+const gameRooms = {};
 
-function getRoomState(roomCode) {
-  if (!roomStates[roomCode]) {
-    roomStates[roomCode] = {
-      meat: {
-        state: "available",
-        itemType: "raw-meat",
-        userId: null,
+function getGameRoom(roomCode) {
+  if (!gameRooms[roomCode]) {
+    console.log(`Creating new GameRoom: ${roomCode}`);
 
-        // Raw meat starts here
-        x: 160,
-        y: 150,
-
-        // Cooking information
-        cookingStartedAt: null,
-        cookingDuration: 0,
-      },
-    };
+    gameRooms[roomCode] = new GameRoom(roomCode);
   }
 
-  return roomStates[roomCode];
-}
-
-function emitState(roomCode) {
-  io.to(roomCode).emit("game-state", getRoomState(roomCode));
+  return gameRooms[roomCode];
 }
 
 // ==========================================
@@ -53,7 +36,10 @@ function emitState(roomCode) {
 // ==========================================
 
 io.on("connection", (socket) => {
+  console.log("🔥 SOCKET CONNECTION:", socket.id);
+  console.log("==========================================");
   console.log("Client connected:", socket.id);
+  console.log("==========================================");
 
   // ==========================================
   // JOIN ROOM
@@ -61,6 +47,7 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", ({ roomCode, userId }) => {
     if (!roomCode || !userId) {
+      console.log("Invalid join-room data");
       return;
     }
 
@@ -69,15 +56,15 @@ io.on("connection", (socket) => {
     socket.join(normalizedRoomCode);
 
     socket.data.roomCode = normalizedRoomCode;
+
     socket.data.userId = userId;
 
-    const state = getRoomState(normalizedRoomCode);
+    const gameRoom = getGameRoom(normalizedRoomCode);
 
     console.log(`User ${userId} joined room ${normalizedRoomCode}`);
 
     // Send current game state
-    // to the player who just joined
-    socket.emit("game-state", state);
+    socket.emit("game-state", gameRoom.getState());
 
     socket.emit("room-joined", {
       roomCode: normalizedRoomCode,
@@ -151,193 +138,171 @@ io.on("connection", (socket) => {
   });
 
   // ==========================================
-  // PICK RAW MEAT
+  // TAKE INGREDIENT FROM SHELF
   // ==========================================
 
-  socket.on("pick-meat", ({ roomCode, userId }) => {
-    if (!roomCode || !userId) {
-      return;
-    }
+  socket.on(
+    "take-ingredient",
+    ({ roomCode, userId, shelfId, playerX, playerY }) => {
+      console.log("");
+      console.log("==========================================");
+      console.log("===== TAKE INGREDIENT RECEIVED =====");
+      console.log("==========================================");
 
-    const normalizedRoomCode = String(roomCode).toUpperCase();
+      console.log({
+        roomCode,
+        userId,
+        shelfId,
+        playerX,
+        playerY,
+      });
 
-    const state = getRoomState(normalizedRoomCode);
+      // ==========================================
+      // VALIDATE DATA
+      // ==========================================
 
-    // Only raw meat can be picked
-    if (
-      state.meat.state !== "available" ||
-      state.meat.itemType !== "raw-meat"
-    ) {
-      return;
-    }
-
-    state.meat.state = "held";
-    state.meat.userId = userId;
-
-    state.meat.cookingStartedAt = null;
-    state.meat.cookingDuration = 0;
-
-    console.log(`${userId} picked raw meat in ${normalizedRoomCode}`);
-
-    io.to(normalizedRoomCode).emit("meat-picked", {
-      userId,
-      itemType: "raw-meat",
-    });
-  });
-
-  // ==========================================
-  // DROP MEAT
-  // ==========================================
-
-  socket.on("drop-meat", ({ roomCode, userId, x, y }) => {
-    if (!roomCode || !userId) {
-      return;
-    }
-
-    const normalizedRoomCode = String(roomCode).toUpperCase();
-
-    const state = getRoomState(normalizedRoomCode);
-
-    // Only the player holding the meat
-    // can drop it
-    if (state.meat.state !== "held" || state.meat.userId !== userId) {
-      return;
-    }
-
-    const itemType = state.meat.itemType;
-
-    state.meat.state = "available";
-    state.meat.userId = null;
-
-    state.meat.x = typeof x === "number" ? x : state.meat.x;
-
-    state.meat.y = typeof y === "number" ? y : state.meat.y;
-
-    state.meat.cookingStartedAt = null;
-    state.meat.cookingDuration = 0;
-
-    console.log(`${userId} dropped ${itemType} in ${normalizedRoomCode}`);
-
-    io.to(normalizedRoomCode).emit("meat-dropped", {
-      userId,
-      itemType,
-      x: state.meat.x,
-      y: state.meat.y,
-    });
-  });
-
-  // ==========================================
-  // START COOKING
-  // ==========================================
-
-  socket.on("start-cooking", ({ roomCode, userId }) => {
-    if (!roomCode || !userId) {
-      return;
-    }
-
-    const normalizedRoomCode = String(roomCode).toUpperCase();
-
-    const state = getRoomState(normalizedRoomCode);
-
-    // Must be holding raw meat
-    if (
-      state.meat.state !== "held" ||
-      state.meat.userId !== userId ||
-      state.meat.itemType !== "raw-meat"
-    ) {
-      return;
-    }
-
-    const duration = 7000;
-
-    state.meat.state = "cooking";
-    state.meat.userId = null;
-
-    // Grill position
-    state.meat.x = 450;
-    state.meat.y = 150;
-
-    state.meat.cookingStartedAt = Date.now();
-
-    state.meat.cookingDuration = duration;
-
-    console.log(`${userId} started cooking in ${normalizedRoomCode}`);
-
-    io.to(normalizedRoomCode).emit("cooking-started", {
-      userId,
-      duration,
-    });
-
-    setTimeout(() => {
-      const currentState = getRoomState(normalizedRoomCode);
-
-      // Only finish if still cooking
       if (
-        currentState.meat.state !== "cooking" ||
-        currentState.meat.cookingStartedAt === null
+        !roomCode ||
+        !userId ||
+        !shelfId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
       ) {
+        console.log("INVALID TAKE INGREDIENT DATA");
+
         return;
       }
 
-      currentState.meat.state = "cooked";
+      const normalizedRoomCode = String(roomCode).toUpperCase();
 
-      currentState.meat.itemType = "cooked-meat";
+      console.log("Normalized room:", normalizedRoomCode);
 
-      currentState.meat.userId = null;
+      // ==========================================
+      // GET GAME ROOM
+      // ==========================================
 
-      currentState.meat.x = 450;
-      currentState.meat.y = 150;
+      const gameRoom = getGameRoom(normalizedRoomCode);
 
-      currentState.meat.cookingStartedAt = null;
+      console.log("Game room:", gameRoom.roomCode);
 
-      currentState.meat.cookingDuration = 0;
+      // ==========================================
+      // GET SHELF
+      // ==========================================
 
-      console.log(`Cooking finished in ${normalizedRoomCode}`);
+      const shelf = gameRoom.getShelf(shelfId);
 
-      io.to(normalizedRoomCode).emit("cooking-finished", {
-        userId,
-        x: currentState.meat.x,
-        y: currentState.meat.y,
+      console.log("Shelf:", shelf);
+
+      if (!shelf) {
+        console.log(`Shelf not found: ${shelfId}`);
+
+        return;
+      }
+
+      // ==========================================
+      // CHECK DISTANCE
+      // ==========================================
+
+      const canTake = shelf.canTake(playerX, playerY);
+
+      console.log("Can take:", canTake);
+
+      if (!canTake) {
+        console.log(`${userId} is too far from ${shelfId}`);
+
+        return;
+      }
+
+      // ==========================================
+      // CREATE ITEM
+      // ==========================================
+
+      console.log("Creating item from shelf...");
+
+      const item = gameRoom.createItemFromShelf(shelfId, userId);
+
+      console.log("Created item:", item);
+
+      if (!item) {
+        console.log("FAILED TO CREATE ITEM");
+
+        return;
+      }
+
+      // ==========================================
+      // ITEM CREATED
+      // ==========================================
+
+      console.log(`${userId} took ${item.type} (${item.id})`);
+
+      // ==========================================
+      // SEND ITEM TO ALL PLAYERS
+      // ==========================================
+
+      io.to(normalizedRoomCode).emit("item-created", {
+        item: {
+          id: item.id,
+          type: item.type,
+          state: item.state,
+          x: item.x,
+          y: item.y,
+          userId: item.userId,
+        },
       });
-    }, duration);
-  });
+
+      console.log("item-created event emitted");
+
+      console.log("==========================================");
+      console.log("");
+    },
+  );
 
   // ==========================================
-  // PICK COOKED MEAT
+  // DROP ITEM
   // ==========================================
 
-  socket.on("pick-cooked-meat", ({ roomCode, userId }) => {
-    if (!roomCode || !userId) {
+  socket.on("drop-item", ({ roomCode, userId, itemId, x, y }) => {
+    if (!roomCode || !userId || !itemId) {
       return;
     }
 
     const normalizedRoomCode = String(roomCode).toUpperCase();
 
-    const state = getRoomState(normalizedRoomCode);
+    const gameRoom = getGameRoom(normalizedRoomCode);
 
-    const isCooked =
-      state.meat.itemType === "cooked-meat" &&
-      (state.meat.state === "cooked" || state.meat.state === "available");
+    const item = gameRoom.getItem(itemId);
 
-    if (!isCooked) {
+    if (!item) {
+      console.log(`Item not found: ${itemId}`);
+
       return;
     }
 
-    state.meat.state = "held";
-
-    state.meat.itemType = "cooked-meat";
-
-    state.meat.userId = userId;
-
-    state.meat.cookingStartedAt = null;
-
-    state.meat.cookingDuration = 0;
-
-    console.log(`${userId} picked cooked meat in ${normalizedRoomCode}`);
-
-    io.to(normalizedRoomCode).emit("cooked-meat-picked", {
+    const dropped = item.drop(
       userId,
-      itemType: "cooked-meat",
+
+      typeof x === "number" ? x : item.x,
+
+      typeof y === "number" ? y : item.y,
+    );
+
+    if (!dropped) {
+      console.log(`Failed to drop item: ${itemId}`);
+
+      return;
+    }
+
+    console.log(`${userId} dropped ${item.type} (${item.id})`);
+
+    io.to(normalizedRoomCode).emit("item-dropped", {
+      item: {
+        id: item.id,
+        type: item.type,
+        state: item.state,
+        x: item.x,
+        y: item.y,
+        userId: item.userId,
+      },
     });
   });
 
@@ -356,29 +321,26 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const state = getRoomState(roomCode);
+    const gameRoom = getGameRoom(roomCode);
 
-    // If player disconnects while
-    // holding the meat, release it.
-    if (state.meat.state === "held" && state.meat.userId === userId) {
-      const itemType = state.meat.itemType;
+    // ==========================================
+    // RELEASE HELD ITEMS
+    // ==========================================
 
-      state.meat.state = "available";
+    for (const item of gameRoom.items) {
+      if (item.state === "held" && item.userId === userId) {
+        item.state = "available";
+        item.userId = null;
 
-      state.meat.userId = null;
-
-      if (itemType === "raw-meat") {
-        state.meat.x = 160;
-        state.meat.y = 150;
-      } else {
-        state.meat.x = 450;
-        state.meat.y = 150;
+        console.log(`Released ${item.type} (${item.id}) after disconnect`);
       }
-
-      console.log(`Released ${itemType} after disconnect in ${roomCode}`);
-
-      emitState(roomCode);
     }
+
+    // ==========================================
+    // SEND UPDATED STATE
+    // ==========================================
+
+    io.to(roomCode).emit("game-state", gameRoom.getState());
   });
 });
 
