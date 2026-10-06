@@ -1,7 +1,7 @@
 import Item from "./Item.js";
 import IngredientShelf from "./IngredientShelf.js";
 import CookingStation from "./CookingStation.js";
-
+import CuttingStation from "./CuttingStation.js";
 class GameRoom {
   constructor(roomCode) {
     this.roomCode = roomCode;
@@ -42,15 +42,29 @@ class GameRoom {
     // =====================================
 
     this.stations = [
+      // =====================================
+      // GRILL
+      // =====================================
+
       new CookingStation({
         id: "grill",
         x: 450,
         y: 150,
         cookTime: 5000,
         burnTime: 10000,
-
-        // Grill chỉ nhận meat
         acceptedTypes: ["meat"],
+      }),
+
+      // =====================================
+      // CUTTING BOARD
+      // =====================================
+
+      new CuttingStation({
+        id: "cutting-board",
+        x: 600,
+        y: 150,
+        cutTime: 2000,
+        acceptedTypes: ["tomato"],
       }),
     ];
   }
