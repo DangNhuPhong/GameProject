@@ -20,32 +20,148 @@ const FONT = "'Trebuchet MS', 'Segoe UI', Verdana, sans-serif";
 
 const TEXT_RES = 2;
 
+// Người chơi chỉ đi được ở khu vực phía trước quầy
+const PLAYER_MIN_Y = 225;
+
+// Phải khớp với range phía server (Station.range, IngredientShelf.canTake)
+const INTERACT_RANGE = 100;
+
+// Phải nhỏ hơn hoặc bằng PICKUP_RANGE của server (60)
+const PICKUP_RANGE = 60;
+
 // =====================================
-// STATIONS
+// LAYOUT  (phải khớp với GameRoom.js)
+//
+//  Quầy tường (y = 150)
+//  Meat → Grill   |   Tomato → Cutting   |   Salad
+//
+//  Đảo giữa phòng (y = 400)
+//  Bread, Dough   |   Plates
 // =====================================
 
-const MEAT_SHELF = {
-  id: "meat-shelf",
-  type: "meat",
-  x: 160,
-  y: 150,
+const COUNTER_Y = 150;
+const ISLAND_Y = 400;
+
+const SHELVES = [
+  { id: "meat-shelf", type: "meat", name: "Meat", x: 110, y: COUNTER_Y },
+  { id: "tomato-shelf", type: "tomato", name: "Tomato", x: 470, y: COUNTER_Y },
+  { id: "salad-shelf", type: "salad", name: "Salad", x: 830, y: COUNTER_Y },
+  { id: "bread-shelf", type: "bread", name: "Bread", x: 300, y: ISLAND_Y },
+  { id: "dough-shelf", type: "dough", name: "Dough", x: 470, y: ISLAND_Y },
+];
+
+const PLATE_STATION = {
+  id: "plate-station",
+  x: 800,
+  y: ISLAND_Y,
 };
 
 const GRILL = {
   id: "grill",
-  x: 450,
-  y: 150,
+  x: 280,
+  y: COUNTER_Y,
 };
 
-// Phải khớp với range của Station phía server (90)
-const INTERACT_RANGE = 90;
+const CUTTING_BOARD = {
+  id: "cutting-board",
+  x: 640,
+  y: COUNTER_Y,
+};
+
+// Mô tả các trạm nấu / sơ chế.
+//   accepts(item)  : item đang cầm có đặt lên trạm được không
+//   placeLabel     : chữ gợi ý khi đặt lên
+//   progress(...)  : thanh tiến độ + chữ trạng thái
+const STATIONS = [
+  {
+    ...GRILL,
+    accepts: (item) => item.type === "meat" && item.status === "raw",
+    placeLabel: "Cook meat",
+    progress: (item, st, elapsed) => {
+      if (item.status === "burnt") {
+        return { progress: 1, color: 0x111827, text: "Burnt!" };
+      }
+
+      if (item.status === "cooked") {
+        return {
+          progress: Phaser.Math.Clamp(
+            (elapsed - st.cookTime) / (st.burnTime - st.cookTime),
+            0,
+            1,
+          ),
+          color: 0xf59e0b,
+          text: "Cooked! Take it out",
+        };
+      }
+
+      return {
+        progress: Phaser.Math.Clamp(elapsed / st.cookTime, 0, 1),
+        color: 0x22c55e,
+        text: "Cooking...",
+      };
+    },
+  },
+  {
+    ...CUTTING_BOARD,
+    accepts: (item) =>
+      (item.type === "tomato" || item.type === "salad") &&
+      item.status === "raw",
+    placeLabel: "Chop",
+    progress: (item, st, elapsed) => {
+      if (item.status === "chopped") {
+        return { progress: 1, color: 0x22c55e, text: "Chopped! Take it out" };
+      }
+
+      return {
+        progress: Phaser.Math.Clamp(elapsed / st.cutTime, 0, 1),
+        color: 0x38bdf8,
+        text: "Chopping...",
+      };
+    },
+  },
+];
 
 // Màu item theo trạng thái nấu
 function itemColor(type, status) {
-  if (status === "burnt") return 0x1f1f1f;
-  if (status === "cooked") return 0x8b4513;
+  if (type === "plate") {
+    return 0xffffff;
+  }
 
-  return type === "meat" ? 0xc0392b : 0x8b4513;
+  if (status === "burnt") {
+    return 0x1f1f1f;
+  }
+
+  if (status === "cooked") {
+    return 0x8b4513;
+  }
+
+  if (status === "chopped") {
+    if (type === "tomato") {
+      return 0xff6b6b;
+    }
+
+    return 0x86efac;
+  }
+
+  switch (type) {
+    case "meat":
+      return 0xc0392b;
+
+    case "tomato":
+      return 0xef4444;
+
+    case "salad":
+      return 0x22c55e;
+
+    case "bread":
+      return 0xd9a441;
+
+    case "dough":
+      return 0xf5d6a6;
+
+    default:
+      return 0x94a3b8;
+  }
 }
 
 // =====================================
@@ -132,10 +248,10 @@ function Game() {
         this.lastSentX = null;
         this.lastSentY = null;
 
-        // Dynamic items
+        // Dynamic items (kể cả đĩa)
         this.items = {};
 
-        // Trạng thái các trạm (grill...) do server gửi
+        // Trạng thái các trạm do server gửi
         this.stations = {};
 
         // Item currently held by local player
@@ -144,6 +260,9 @@ function Game() {
         // Interaction
         this.hintSig = null;
         this.hintWidth = 0;
+
+        // Score hiển thị trong map
+        this.score = 0;
       }
 
       preload() {}
@@ -196,45 +315,71 @@ function Game() {
         g.fillRect(0, 190, W, 16);
 
         // =================================
-        // MEAT SHELF
+        // ISLAND (bread / dough / plates)
         // =================================
 
-        g.fillStyle(0x6b3f1c, 1);
+        const islandX = 215;
+        const islandW = 670;
+        const islandTop = ISLAND_Y - 60;
 
-        g.fillRoundedRect(MEAT_SHELF.x - 95, MEAT_SHELF.y - 42, 190, 84, 12);
+        g.fillStyle(0x000000, 0.12);
+        g.fillRoundedRect(islandX, islandTop + 10, islandW, 130, 14);
 
-        g.fillStyle(0x8b5a2b, 1);
+        g.fillStyle(0xa8743b, 1);
+        g.fillRoundedRect(islandX, islandTop, islandW, 130, 14);
 
-        g.fillRoundedRect(MEAT_SHELF.x - 88, MEAT_SHELF.y - 35, 176, 70, 8);
+        g.fillStyle(0xdcae72, 1);
+        g.fillRoundedRect(islandX, islandTop, islandW, 112, 14);
 
-        this.meatShelf = this.add
-          .rectangle(MEAT_SHELF.x, MEAT_SHELF.y, 176, 70, 0x8b5a2b)
-          .setStrokeStyle(3, 0x6b3f1c)
-          .setDepth(2);
+        g.fillStyle(0xeac38a, 1);
+        g.fillRoundedRect(islandX + 6, islandTop + 4, islandW - 12, 6, 3);
 
-        this.meatShelfLabel = this.makeLabel(MEAT_SHELF.x, 228, "Meat Shelf");
+        // =================================
+        // SCORE (in map)
+        // =================================
+
+        this.scoreText = this.add
+          .text(W / 2, 44, "SCORE  0", {
+            fontFamily: FONT,
+            fontSize: "28px",
+            fontStyle: "bold",
+            color: "#ffffff",
+            backgroundColor: "#12302e",
+            padding: {
+              x: 22,
+              y: 6,
+            },
+            resolution: TEXT_RES,
+          })
+          .setOrigin(0.5)
+          .setDepth(10);
+
+        // =================================
+        // INGREDIENT SHELVES
+        // =================================
+
+        SHELVES.forEach((shelf) => {
+          this.drawBlock(g, shelf.x, shelf.y, 150, 80, 0x6b3f1c, 0x8b5a2b);
+
+          this.drawShelfIcons(shelf.type, shelf.x, shelf.y);
+
+          this.makeLabel(shelf.x, shelf.y + 60, `${shelf.name} Shelf`);
+        });
 
         // =================================
         // GRILL
         // =================================
 
-        g.fillStyle(0x2b333a, 1);
-
-        g.fillRoundedRect(450 - 68, 150 - 44, 136, 88, 12);
-
-        this.grill = this.add
-          .rectangle(450, 150, 120, 76, 0x3d474f)
-          .setStrokeStyle(3, 0x5b6771)
-          .setDepth(1);
+        this.drawBlock(g, GRILL.x, GRILL.y, 140, 80, 0x2b333a, 0x3d474f);
 
         for (let i = 0; i < 5; i++) {
           this.add
-            .rectangle(450 - 40 + i * 20, 150, 4, 60, 0x4f5a64)
+            .rectangle(GRILL.x - 40 + i * 20, GRILL.y, 4, 54, 0x4f5a64)
             .setDepth(1);
         }
 
         this.add
-          .text(450, 150, "GRILL", {
+          .text(GRILL.x, GRILL.y, "GRILL", {
             fontFamily: FONT,
             fontSize: "20px",
             fontStyle: "bold",
@@ -246,57 +391,101 @@ function Game() {
           .setOrigin(0.5)
           .setDepth(2);
 
-        this.grillLabel = this.makeLabel(450, 228, "");
-
-        this.grillLabel.setVisible(false);
-
-        // Thanh tiến độ nướng
-        this.grillBar = this.add.graphics().setDepth(7);
+        this.makeLabel(GRILL.x, GRILL.y + 60, "Grill");
 
         // =================================
-        // TOMATO STATION
+        // CUTTING BOARD
         // =================================
 
-        g.fillStyle(0x6b3f1c, 1);
+        this.drawBlock(
+          g,
+          CUTTING_BOARD.x,
+          CUTTING_BOARD.y,
+          140,
+          80,
+          0x8b5a2b,
+          0xd9b47a,
+        );
 
-        g.fillRoundedRect(740 - 95, 150 - 42, 190, 84, 12);
+        // Knife
+        g.lineStyle(5, 0xd9d9d9, 1);
+        g.beginPath();
+        g.moveTo(CUTTING_BOARD.x - 18, CUTTING_BOARD.y - 10);
+        g.lineTo(CUTTING_BOARD.x + 15, CUTTING_BOARD.y + 10);
+        g.strokePath();
 
-        g.fillStyle(0x8b5a2b, 1);
+        g.lineStyle(6, 0x3b2415, 1);
+        g.beginPath();
+        g.moveTo(CUTTING_BOARD.x + 15, CUTTING_BOARD.y + 10);
+        g.lineTo(CUTTING_BOARD.x + 27, CUTTING_BOARD.y + 18);
+        g.strokePath();
 
-        g.fillRoundedRect(740 - 88, 150 - 35, 176, 70, 8);
+        this.makeLabel(CUTTING_BOARD.x, CUTTING_BOARD.y + 60, "Cutting Board");
 
-        this.add
-          .circle(706, 154, 16, 0xe63946)
-          .setStrokeStyle(3, 0xa4161a)
-          .setDepth(3);
+        // =================================
+        // PLATE STATION
+        // =================================
 
-        this.add
-          .circle(774, 154, 16, 0xe63946)
-          .setStrokeStyle(3, 0xa4161a)
-          .setDepth(3);
+        this.drawBlock(
+          g,
+          PLATE_STATION.x,
+          PLATE_STATION.y,
+          140,
+          80,
+          0x475569,
+          0x64748b,
+        );
 
-        this.tomato = this.add
-          .circle(740, 146, 18, 0xef4b57)
-          .setStrokeStyle(3, 0xa4161a)
-          .setDepth(3);
+        for (let i = 0; i < 3; i++) {
+          this.add
+            .ellipse(
+              PLATE_STATION.x,
+              PLATE_STATION.y + 8 - i * 6,
+              54,
+              26,
+              0xffffff,
+            )
+            .setStrokeStyle(2, 0x94a3b8)
+            .setDepth(3);
+        }
 
-        this.makeLabel(740, 228, "Tomato");
+        this.makeLabel(PLATE_STATION.x, PLATE_STATION.y + 60, "Plates");
+
+        // =================================
+        // STATION PROGRESS (grill + cutting board)
+        // =================================
+
+        this.stationBar = this.add.graphics().setDepth(7);
+
+        this.stationLabels = {};
+
+        STATIONS.forEach((cfg) => {
+          const label = this.makeLabel(cfg.x, cfg.y - 72, "");
+
+          label.setDepth(8);
+          label.setVisible(false);
+
+          this.stationLabels[cfg.id] = label;
+        });
 
         // =================================
         // CURRENT PLAYER
         // =================================
 
+        const spawnX = W / 2 + 20;
+        const spawnY = 290;
+
         this.playerShadow = this.add
-          .ellipse(W / 2, H / 2 + 24, 44, 12, 0x000000, 0.2)
+          .ellipse(spawnX, spawnY + 24, 44, 12, 0x000000, 0.2)
           .setDepth(4);
 
         this.player = this.add
-          .rectangle(W / 2, H / 2, 40, 40, 0x2563eb)
+          .rectangle(spawnX, spawnY, 40, 40, 0x2563eb)
           .setStrokeStyle(4, 0x1e3a8a)
           .setDepth(5);
 
         this.playerLabel = this.add
-          .text(W / 2, H / 2 - 34, "YOU", {
+          .text(spawnX, spawnY - 34, "YOU", {
             fontFamily: FONT,
             fontSize: "14px",
             fontStyle: "bold",
@@ -325,9 +514,8 @@ function Game() {
           D: Phaser.Input.Keyboard.KeyCodes.D,
         });
 
-        this.interactKey = this.input.keyboard.addKey(
-          Phaser.Input.Keyboard.KeyCodes.E,
-        );
+        this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
         this.input.keyboard.on("keydown-E", (event) => {
           // Bỏ qua khi giữ phím E (key repeat)
           if (event && event.repeat) {
@@ -347,9 +535,6 @@ function Game() {
 
         if (!socket.connected) {
           socket.connect();
-          console.log("SOCKET URL:", socket.io.uri);
-          console.log("SOCKET CONNECTED:", socket.connected);
-          console.log("SOCKET ID:", socket.id);
         }
 
         // =================================
@@ -357,8 +542,6 @@ function Game() {
         // =================================
 
         socket.on("game-state", (state) => {
-          console.log("Received game state:", state);
-
           if (!state) {
             return;
           }
@@ -373,10 +556,10 @@ function Game() {
           this.items = {};
           this.heldItemId = null;
 
-          // Rebuild items from server
+          // Rebuild items from server (gồm cả đĩa)
           if (Array.isArray(state.items)) {
             state.items.forEach((itemData) => {
-              this.createItemVisual(itemData);
+              this.upsertItem(itemData);
             });
           }
 
@@ -391,71 +574,31 @@ function Game() {
         });
 
         // =================================
-        // ITEM CREATED
+        // ITEM EVENTS
+        //
+        // item / plate đều đi qua upsertItem,
+        // heldItemId được cập nhật ở đó.
         // =================================
 
-        socket.on("item-created", ({ item }) => {
-          console.log("Item created:", item);
+        this.itemEvents = [
+          "item-created",
+          "item-picked",
+          "item-dropped",
+          "plate-created",
+          "plate-picked",
+          "plate-dropped",
+        ];
 
-          if (!item) {
-            return;
-          }
+        this.itemEvents.forEach((eventName) => {
+          socket.on(eventName, (payload) => {
+            const item = payload?.item || payload?.plate;
 
-          this.createItemVisual(item);
+            if (!item) {
+              return;
+            }
 
-          if (item.userId === user.id && item.state === "held") {
-            this.heldItemId = item.id;
-          }
-        });
-
-        // =================================
-        // ITEM PICKED
-        // =================================
-
-        socket.on("item-picked", ({ item }) => {
-          console.log("Item picked:", item);
-
-          if (!item) {
-            return;
-          }
-
-          if (!this.items[item.id]) {
-            this.createItemVisual(item);
-          } else {
-            this.updateItemVisual(item);
-          }
-
-          if (item.userId === user.id && item.state === "held") {
-            this.heldItemId = item.id;
-          }
-        });
-
-        // =================================
-        // ITEM DROPPED
-        // =================================
-
-        socket.on("item-dropped", ({ item }) => {
-          console.log("Item dropped:", item);
-
-          if (!item) {
-            return;
-          }
-
-          const existing = this.items[item.id];
-
-          if (!existing) {
-            this.createItemVisual(item);
-          } else {
-            this.updateItemVisual(item);
-          }
-
-          if (this.heldItemId === item.id && item.userId !== user.id) {
-            this.heldItemId = null;
-          }
-
-          if (this.heldItemId === item.id && item.state === "available") {
-            this.heldItemId = null;
-          }
+            this.upsertItem(item);
+          });
         });
 
         // =================================
@@ -463,18 +606,8 @@ function Game() {
         // =================================
 
         socket.on("station-updated", ({ station, item }) => {
-          console.log("Station updated:", station, item);
-
           if (item) {
-            // Tạo mới hoặc cập nhật visual của item
-            this.createItemVisual(item);
-
-            if (item.userId === user.id && item.state === "held") {
-              this.heldItemId = item.id;
-            } else if (this.heldItemId === item.id) {
-              // Item đã được đặt lên trạm
-              this.heldItemId = null;
-            }
+            this.upsertItem(item);
           }
 
           if (station) {
@@ -517,91 +650,170 @@ function Game() {
       }
 
       // =====================================
-      // ITEM HELPERS
+      // DRAW HELPERS
       // =====================================
 
-      createItemVisual(itemData) {
+      drawBlock(g, x, y, w, h, outer, inner) {
+        // Bóng
+        g.fillStyle(0x000000, 0.15);
+        g.fillRoundedRect(x - w / 2 + 3, y - h / 2 + 5, w, h, 12);
+
+        g.fillStyle(outer, 1);
+        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 12);
+
+        g.fillStyle(inner, 1);
+        g.fillRoundedRect(x - w / 2 + 7, y - h / 2 + 7, w - 14, h - 14, 8);
+      }
+
+      drawShelfIcons(type, x, y) {
+        switch (type) {
+          case "meat":
+            [-1, 0, 1].forEach((i) => {
+              this.add
+                .ellipse(x + i * 38, y + (i === 0 ? -6 : 5), 32, 22, 0xc0392b)
+                .setStrokeStyle(2, 0x7f1d1d)
+                .setDepth(3);
+            });
+            break;
+
+          case "tomato":
+            this.add
+              .circle(x - 34, y + 5, 16, 0xef4444)
+              .setStrokeStyle(3, 0xa4161a)
+              .setDepth(3);
+
+            this.add
+              .circle(x + 34, y + 5, 16, 0xef4444)
+              .setStrokeStyle(3, 0xa4161a)
+              .setDepth(3);
+
+            this.add
+              .circle(x, y - 8, 18, 0xf87171)
+              .setStrokeStyle(3, 0xa4161a)
+              .setDepth(3);
+            break;
+
+          case "salad":
+            for (let i = 0; i < 5; i++) {
+              const angle = (i / 5) * Math.PI * 2;
+
+              this.add
+                .ellipse(
+                  x + Math.cos(angle) * 28,
+                  y + Math.sin(angle) * 16,
+                  30,
+                  20,
+                  0x22c55e,
+                )
+                .setStrokeStyle(2, 0x15803d)
+                .setDepth(3);
+            }
+            break;
+
+          case "bread":
+            [-1, 1].forEach((i) => {
+              this.add
+                .ellipse(x + i * 32, y, 50, 28, 0xd9a441)
+                .setStrokeStyle(3, 0x92400e)
+                .setDepth(3);
+            });
+            break;
+
+          case "dough":
+            [-1, 1].forEach((i) => {
+              this.add
+                .circle(x + i * 30, y, 18, 0xf5d6a6)
+                .setStrokeStyle(3, 0xc9a36b)
+                .setDepth(3);
+            });
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      makeLabel(x, y, text) {
+        return this.add
+          .text(x, y, text, {
+            fontFamily: FONT,
+            fontSize: "15px",
+            fontStyle: "bold",
+            color: "#ffffff",
+            backgroundColor: "#12302e",
+            padding: {
+              x: 10,
+              y: 4,
+            },
+            resolution: TEXT_RES,
+          })
+          .setOrigin(0.5)
+          .setDepth(2);
+      }
+
+      // =====================================
+      // ITEM HELPERS
+      //
+      // Item thường và đĩa dùng chung một cấu trúc
+      // (type, state, status, x, y, userId, stationId)
+      // nên findNearbyItem / heldItemId hoạt động như nhau.
+      // =====================================
+
+      upsertItem(itemData) {
         if (!itemData?.id) {
           return;
         }
 
-        // Update existing item
-        if (this.items[itemData.id]) {
-          this.updateItemVisual(itemData);
-          return;
+        if (!this.items[itemData.id]) {
+          const isPlate = itemData.type === "plate";
+
+          const sprite = isPlate
+            ? this.add
+                .ellipse(itemData.x, itemData.y, 44, 30, 0xffffff)
+                .setStrokeStyle(3, 0x94a3b8)
+                .setDepth(6)
+            : this.add
+                .circle(itemData.x, itemData.y, 15, 0xffffff)
+                .setStrokeStyle(3, 0x4e2a0b)
+                .setDepth(6);
+
+          this.items[itemData.id] = {
+            id: itemData.id,
+            type: itemData.type,
+            sprite,
+          };
         }
 
-        const color = itemColor(itemData.type, itemData.status);
-
-        const sprite = this.add
-          .circle(itemData.x, itemData.y, 15, color)
-          .setStrokeStyle(3, 0x4e2a0b)
-          .setDepth(6);
-
-        this.items[itemData.id] = {
-          id: itemData.id,
-          type: itemData.type,
-          state: itemData.state,
-          status: itemData.status || "raw",
-          stationId: itemData.stationId || null,
-          userId: itemData.userId,
-          x: itemData.x,
-          y: itemData.y,
-          sprite,
-        };
-
-        if (itemData.userId === user.id && itemData.state === "held") {
-          this.heldItemId = itemData.id;
-
-          sprite.setVisible(false);
-        }
-
-        this.updateItemVisual(itemData);
-      }
-
-      updateItemVisual(itemData) {
         const item = this.items[itemData.id];
 
-        if (!item) {
-          return;
-        }
-
         item.state = itemData.state;
-
-        item.userId = itemData.userId;
-
-        item.status = itemData.status || item.status || "raw";
-
+        item.userId = itemData.userId || null;
+        item.status = itemData.status || "raw";
         item.stationId = itemData.stationId || null;
-
+        item.ingredients = itemData.ingredients || [];
         item.x = itemData.x;
         item.y = itemData.y;
 
-        if (!item.sprite) {
-          return;
+        // Theo dõi item đang cầm của mình
+        if (item.state === "held" && item.userId === user.id) {
+          this.heldItemId = item.id;
+        } else if (this.heldItemId === item.id) {
+          this.heldItemId = null;
         }
 
-        // Màu theo trạng thái: sống / chín / cháy
+        // Màu: sống / chín / cháy / đã thái
         item.sprite.setFillStyle(itemColor(item.type, item.status));
 
-        // Held by current player
-        if (itemData.state === "held" && itemData.userId === user.id) {
+        // Đang được cầm (mình hoặc người khác) → ẩn, vẽ ở chỗ người cầm
+        if (item.state === "held") {
           item.sprite.setVisible(false);
           return;
         }
 
-        // Held by another player
-        if (itemData.state === "held") {
-          item.sprite.setVisible(false);
-          return;
-        }
-
-        // Available on floor
+        // Dưới đất hoặc trên trạm
         item.sprite.setVisible(true);
-
-        item.sprite.x = itemData.x;
-
-        item.sprite.y = itemData.y;
+        item.sprite.x = item.x;
+        item.sprite.y = item.y;
       }
 
       removeItemVisual(itemId) {
@@ -622,32 +834,28 @@ function Game() {
         }
       }
 
-      // =====================================
-      // LABEL
-      // =====================================
+      setScore(value) {
+        this.score = value;
 
-      makeLabel(x, y, text) {
-        return this.add
-          .text(x, y, text, {
-            fontFamily: FONT,
-            fontSize: "15px",
-            fontStyle: "bold",
-            color: "#ffffff",
-            backgroundColor: "#12302e",
-            padding: {
-              x: 10,
-              y: 4,
-            },
-            resolution: TEXT_RES,
-          })
-          .setOrigin(0.5)
-          .setDepth(2);
+        if (this.scoreText) {
+          this.scoreText.setText(`SCORE  ${value}`);
+        }
       }
 
-      setGrillText(text) {
-        this.grillLabel.setText(text);
+      setStationState(stationData) {
+        if (!stationData?.id) {
+          return;
+        }
 
-        this.grillLabel.setVisible(Boolean(text));
+        this.stations[stationData.id] = {
+          id: stationData.id,
+          itemId: stationData.itemId || null,
+          cookTime: stationData.cookTime || 5000,
+          burnTime: stationData.burnTime || 10000,
+          cutTime: stationData.cutTime || 2000,
+          elapsedMs: stationData.elapsedMs || 0,
+          receivedAt: Date.now(),
+        };
       }
 
       // =====================================
@@ -790,59 +998,18 @@ function Game() {
       }
 
       // =====================================
-      // ACTIONS
+      // INTERACTION  (một nguồn duy nhất cho phím E + gợi ý)
       // =====================================
 
-      takeMeatFromShelf() {
-        console.log("===== TAKE MEAT START =====");
-
-        if (!this.player) {
-          console.log("NO PLAYER");
-          return;
-        }
-
-        console.log("PLAYER:", this.player.x, this.player.y);
-        console.log("SHELF:", this.meatShelf.x, this.meatShelf.y);
-
-        const distance = Phaser.Math.Distance.Between(
-          this.player.x,
-          this.player.y,
-          this.meatShelf.x,
-          this.meatShelf.y,
-        );
-
-        console.log("DISTANCE:", distance);
-
-        if (distance > 90) {
-          console.log("TOO FAR");
-          return;
-        }
-
-        if (this.heldItemId) {
-          console.log("ALREADY HOLDING:", this.heldItemId);
-          return;
-        }
-
-        console.log("SENDING TAKE INGREDIENT");
-        console.log("SOCKET CONNECTED:", socket.connected);
-        console.log("SOCKET ID:", socket.id);
-
-        socket.emit("take-ingredient", {
-          roomCode,
-          userId: user.id,
-          shelfId: "meat-shelf",
-          playerX: this.player.x,
-          playerY: this.player.y,
-        });
+      distanceTo(x, y) {
+        return Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
       }
 
+      // Item nằm dưới đất gần nhất (item thường và đĩa)
       findNearbyItem() {
         if (!this.player) {
           return null;
         }
-
-        // Phải nhỏ hơn hoặc bằng PICKUP_RANGE của server (60)
-        const PICKUP_RANGE = 60;
 
         let closest = null;
         let closestDistance = Infinity;
@@ -852,12 +1019,7 @@ function Game() {
             return;
           }
 
-          const distance = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            item.x,
-            item.y,
-          );
+          const distance = this.distanceTo(item.x, item.y);
 
           if (distance <= PICKUP_RANGE && distance < closestDistance) {
             closest = item;
@@ -866,6 +1028,153 @@ function Game() {
         });
 
         return closest;
+      }
+
+      // Trả về { label, run } cho hành động E hiện tại, hoặc null.
+      findInteraction() {
+        if (!this.player) {
+          return null;
+        }
+
+        // ---------------------------------
+        // ĐANG CẦM ITEM → đặt lên trạm gần nhất phù hợp
+        // ---------------------------------
+
+        if (this.heldItemId) {
+          const held = this.items[this.heldItemId];
+
+          if (!held) {
+            return null;
+          }
+
+          let best = null;
+
+          for (const cfg of STATIONS) {
+            const station = this.stations[cfg.id];
+
+            if (station && station.itemId) {
+              continue;
+            }
+
+            if (!cfg.accepts(held)) {
+              continue;
+            }
+
+            const d = this.distanceTo(cfg.x, cfg.y);
+
+            if (d > INTERACT_RANGE) {
+              continue;
+            }
+
+            if (!best || d < best.d) {
+              best = {
+                d,
+                label: cfg.placeLabel,
+                run: () => this.placeOnStation(cfg.id),
+              };
+            }
+          }
+
+          return best;
+        }
+
+        // ---------------------------------
+        // TAY TRỐNG
+        // ---------------------------------
+
+        // 1. Item / đĩa đang nằm dưới đất → ưu tiên cao nhất
+        const floorItem = this.findNearbyItem();
+
+        if (floorItem) {
+          return {
+            label: `Pick up ${floorItem.type}`,
+            run: () => this.pickUpItem(floorItem.id),
+          };
+        }
+
+        // 2. Lấy từ trạm / bàn đĩa / kệ → chọn cái gần nhất
+        let best = null;
+
+        const consider = (d, label, run) => {
+          if (d > INTERACT_RANGE) {
+            return;
+          }
+
+          if (!best || d < best.d) {
+            best = { d, label, run };
+          }
+        };
+
+        STATIONS.forEach((cfg) => {
+          const station = this.stations[cfg.id];
+
+          const item = station && station.itemId && this.items[station.itemId];
+
+          if (!item) {
+            return;
+          }
+
+          consider(
+            this.distanceTo(cfg.x, cfg.y),
+            `Take ${item.status} ${item.type}`,
+            () => this.takeFromStation(cfg.id),
+          );
+        });
+
+        consider(
+          this.distanceTo(PLATE_STATION.x, PLATE_STATION.y),
+          "Take plate",
+          () => this.takePlate(),
+        );
+
+        SHELVES.forEach((shelf) => {
+          consider(
+            this.distanceTo(shelf.x, shelf.y),
+            `Take ${shelf.type}`,
+            () => this.takeIngredientFromShelf(shelf),
+          );
+        });
+
+        return best;
+      }
+
+      handleInteract() {
+        const action = this.findInteraction();
+
+        if (action) {
+          action.run();
+        }
+      }
+
+      // =====================================
+      // ACTIONS (emit lên server)
+      // =====================================
+
+      takeIngredientFromShelf(shelf) {
+        if (!this.player || this.heldItemId) {
+          return;
+        }
+
+        socket.emit("take-ingredient", {
+          roomCode,
+          userId: user.id,
+          shelfId: shelf.id,
+          playerX: this.player.x,
+          playerY: this.player.y,
+        });
+      }
+
+      takePlate() {
+        if (!this.player || this.heldItemId) {
+          return;
+        }
+
+        socket.emit("take-plate", {
+          roomCode,
+          userId: user.id,
+          playerX: this.player.x,
+          playerY: this.player.y,
+        });
       }
 
       pickUpItem(itemId) {
@@ -880,98 +1189,6 @@ function Game() {
           playerX: this.player.x,
           playerY: this.player.y,
         });
-      }
-
-      setStationState(stationData) {
-        if (!stationData?.id) {
-          return;
-        }
-
-        this.stations[stationData.id] = {
-          id: stationData.id,
-          itemId: stationData.itemId || null,
-          cookTime: stationData.cookTime || 5000,
-          burnTime: stationData.burnTime || 10000,
-          elapsedMs: stationData.elapsedMs || 0,
-          receivedAt: Date.now(),
-        };
-      }
-
-      distanceTo(x, y) {
-        return Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
-      }
-
-      // Đang cầm thịt sống, gần grill và grill còn trống
-      canPlaceOnGrill() {
-        if (!this.player || !this.heldItemId) {
-          return false;
-        }
-
-        const heldItem = this.items[this.heldItemId];
-
-        const station = this.stations[GRILL.id];
-
-        if (
-          !heldItem ||
-          heldItem.type !== "meat" ||
-          heldItem.status !== "raw"
-        ) {
-          return false;
-        }
-
-        if (station && station.itemId) {
-          return false;
-        }
-
-        return this.distanceTo(GRILL.x, GRILL.y) <= INTERACT_RANGE;
-      }
-
-      // Tay trống, gần grill và grill đang có món
-      canTakeFromGrill() {
-        if (!this.player || this.heldItemId) {
-          return false;
-        }
-
-        const station = this.stations[GRILL.id];
-
-        if (!station || !station.itemId) {
-          return false;
-        }
-
-        return this.distanceTo(GRILL.x, GRILL.y) <= INTERACT_RANGE;
-      }
-
-      // Xử lý phím E theo thứ tự ưu tiên
-      handleInteract() {
-        if (!this.player) {
-          return;
-        }
-
-        // 1. Đang cầm item: đặt lên trạm nếu hợp lệ
-        if (this.heldItemId) {
-          if (this.canPlaceOnGrill()) {
-            this.placeOnStation(GRILL.id);
-          }
-
-          return;
-        }
-
-        // 2. Nhặt item rơi dưới đất
-        const nearbyItem = this.findNearbyItem();
-
-        if (nearbyItem) {
-          this.pickUpItem(nearbyItem.id);
-          return;
-        }
-
-        // 3. Lấy món từ grill
-        if (this.canTakeFromGrill()) {
-          this.takeFromStation(GRILL.id);
-          return;
-        }
-
-        // 4. Lấy thịt từ shelf
-        this.takeMeatFromShelf();
       }
 
       placeOnStation(stationId) {
@@ -1003,71 +1220,6 @@ function Game() {
         });
       }
 
-      // Vẽ thanh tiến độ + chữ trạng thái của grill
-      updateGrillView() {
-        if (!this.grillBar) {
-          return;
-        }
-
-        this.grillBar.clear();
-
-        const station = this.stations[GRILL.id];
-
-        const item =
-          station && station.itemId ? this.items[station.itemId] : null;
-
-        if (!station || !item) {
-          this.setGrillText("");
-
-          return;
-        }
-
-        const elapsed = station.elapsedMs + (Date.now() - station.receivedAt);
-
-        let progress = 0;
-        let color = 0x22c55e;
-        let text = "Cooking...";
-
-        if (item.status === "burnt") {
-          progress = 1;
-          color = 0x111827;
-          text = "Burnt!";
-        } else if (item.status === "cooked") {
-          // Thanh cam: còn bao lâu nữa thì cháy
-          progress = Phaser.Math.Clamp(
-            (elapsed - station.cookTime) /
-              (station.burnTime - station.cookTime),
-            0,
-            1,
-          );
-          color = 0xf59e0b;
-          text = "Cooked! Take it out";
-        } else {
-          progress = Phaser.Math.Clamp(elapsed / station.cookTime, 0, 1);
-        }
-
-        const barW = 100;
-        const barH = 10;
-        const barX = GRILL.x - barW / 2;
-        const barY = GRILL.y - 42;
-
-        this.grillBar.fillStyle(0x000000, 0.55);
-        this.grillBar.fillRoundedRect(
-          barX - 2,
-          barY - 2,
-          barW + 4,
-          barH + 4,
-          4,
-        );
-
-        this.grillBar.fillStyle(color, 1);
-        this.grillBar.fillRect(barX, barY, barW * progress, barH);
-
-        if (this.grillLabel.text !== text) {
-          this.setGrillText(text);
-        }
-      }
-
       dropItem() {
         if (!this.heldItemId) {
           return;
@@ -1079,6 +1231,60 @@ function Game() {
           itemId: this.heldItemId,
           x: this.player.x,
           y: this.player.y,
+        });
+      }
+
+      // =====================================
+      // STATION VIEW (thanh tiến độ + chữ trạng thái)
+      // =====================================
+
+      updateStationViews() {
+        this.stationBar.clear();
+
+        STATIONS.forEach((cfg) => {
+          const label = this.stationLabels[cfg.id];
+
+          const station = this.stations[cfg.id];
+
+          const item =
+            station && station.itemId ? this.items[station.itemId] : null;
+
+          if (!station || !item) {
+            label.setVisible(false);
+
+            return;
+          }
+
+          const elapsed = station.elapsedMs + (Date.now() - station.receivedAt);
+
+          const { progress, color, text } = cfg.progress(
+            item,
+            station,
+            elapsed,
+          );
+
+          const barW = 100;
+          const barH = 10;
+          const barX = cfg.x - barW / 2;
+          const barY = cfg.y - 56;
+
+          this.stationBar.fillStyle(0x000000, 0.55);
+          this.stationBar.fillRoundedRect(
+            barX - 2,
+            barY - 2,
+            barW + 4,
+            barH + 4,
+            4,
+          );
+
+          this.stationBar.fillStyle(color, 1);
+          this.stationBar.fillRect(barX, barY, barW * progress, barH);
+
+          if (label.text !== text) {
+            label.setText(text);
+          }
+
+          label.setVisible(true);
         });
       }
 
@@ -1146,142 +1352,69 @@ function Game() {
 
         this.player.y = Phaser.Math.Clamp(
           this.player.y,
-          80,
+          PLAYER_MIN_Y,
           this.scale.height - 40,
         );
 
-        // Player label
         this.playerLabel.x = this.player.x;
-
         this.playerLabel.y = this.player.y - 34;
 
-        // Player shadow
         this.playerShadow.x = this.player.x;
-
         this.playerShadow.y = this.player.y + 24;
 
-        // Send multiplayer position
         this.sendPosition();
 
         // =================================
-        // INTERACTION
+        // TỰ SỬA heldItemId BỊ KẸT
+        // (trỏ tới item không còn tồn tại → E sẽ không bao giờ nhặt được)
         // =================================
 
-        let hint = null;
+        if (this.heldItemId && !this.items[this.heldItemId]) {
+          this.heldItemId = null;
+        }
 
-        // ---------------------------------
-        // PLAYER IS HOLDING ITEM
-        // ---------------------------------
+        // =================================
+        // INTERACTION HINT
+        // =================================
 
-        if (this.heldItemId) {
-          const heldItem = this.items[this.heldItemId];
+        const heldItem = this.heldItemId ? this.items[this.heldItemId] : null;
 
-          // Q = drop
+        let hint = [];
+
+        const action = this.findInteraction();
+
+        if (action) {
+          hint.push({ key: "E", label: action.label });
+        }
+
+        if (heldItem) {
           if (Phaser.Input.Keyboard.JustDown(this.dropKey)) {
             this.dropItem();
           }
 
-          hint = [];
+          hint.push({ key: "Q", label: `Drop ${heldItem.type}` });
 
-          if (this.canPlaceOnGrill()) {
-            hint.push({
-              key: "E",
-              label: "Cook meat",
-            });
+          // Hình item đang cầm trên đầu người chơi
+          const color = itemColor(heldItem.type, heldItem.status);
+
+          if (!this.heldItemVisual) {
+            this.heldItemVisual = this.add
+              .circle(this.player.x, this.player.y - 25, 10, color)
+              .setStrokeStyle(2, 0x3b1a0a)
+              .setDepth(6);
           }
 
-          hint.push({
-            key: "Q",
-            label: "Drop meat",
-          });
+          this.heldItemVisual.setFillStyle(color);
 
-          // Held item follows player
-          if (heldItem) {
-            const color = itemColor(heldItem.type, heldItem.status);
+          this.heldItemVisual.x = this.player.x;
+          this.heldItemVisual.y = this.player.y - 25;
+        } else if (this.heldItemVisual) {
+          this.heldItemVisual.destroy();
 
-            if (heldItem.sprite) {
-              heldItem.sprite.setVisible(false);
-            }
-
-            // Draw held item
-            if (!this.heldItemVisual) {
-              this.heldItemVisual = this.add
-                .circle(this.player.x, this.player.y - 25, 10, color)
-                .setStrokeStyle(2, 0x3b1a0a)
-                .setDepth(6);
-            }
-
-            this.heldItemVisual.setFillStyle(color);
-
-            this.heldItemVisual.x = this.player.x;
-
-            this.heldItemVisual.y = this.player.y - 25;
-          }
+          this.heldItemVisual = null;
         }
 
-        // ---------------------------------
-        // PLAYER IS NOT HOLDING ITEM
-        // ---------------------------------
-        else {
-          // Hide held visual
-          if (this.heldItemVisual) {
-            this.heldItemVisual.destroy();
-
-            this.heldItemVisual = null;
-          }
-
-          // --------------------------------
-          // MEAT SHELF
-          // --------------------------------
-
-          const distanceToShelf = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            this.meatShelf.x,
-            this.meatShelf.y,
-          );
-
-          if (distanceToShelf < 90) {
-            hint = [
-              {
-                key: "E",
-                label: "Take meat",
-              },
-            ];
-          }
-
-          // --------------------------------
-          // GRILL
-          // --------------------------------
-
-          if (this.canTakeFromGrill()) {
-            const grillStation = this.stations[GRILL.id];
-
-            const grillItem = this.items[grillStation.itemId];
-
-            const status = grillItem ? grillItem.status : "raw";
-
-            const label =
-              status === "cooked"
-                ? "Take cooked meat"
-                : status === "burnt"
-                  ? "Take burnt meat"
-                  : "Take raw meat";
-
-            hint = [
-              {
-                key: "E",
-                label,
-              },
-            ];
-          }
-        }
-
-        // =================================
-        // HINT POSITION
-        // =================================
-
-        this.updateGrillView();
+        this.updateStationViews();
 
         this.setHint(hint);
 
@@ -1331,8 +1464,11 @@ function Game() {
       socket.off("game-state");
       socket.off("item-created");
       socket.off("item-picked");
-      socket.off("station-updated");
       socket.off("item-dropped");
+      socket.off("plate-created");
+      socket.off("plate-picked");
+      socket.off("plate-dropped");
+      socket.off("station-updated");
       socket.off("player-position");
       socket.off("player-joined");
 
@@ -1361,30 +1497,10 @@ function Game() {
       {/* Full-screen Phaser map */}
       <div ref={gameRef} className="phaser-container" />
 
-      {/* Top bar */}
-      <header className="hud-top">
-        <div className="hud-panel hud-brand">
-          <h1>Kitchen Panic</h1>
-
-          <span className="hud-room">Room {roomCode}</span>
-        </div>
-
-        <div className="hud-panel hud-score">
-          <span className="hud-score-label">Score</span>
-
-          <strong>0</strong>
-        </div>
-
-        <div className="hud-right">
-          <div className="hud-panel hud-players">
-            Players {match?.players?.length || 0}/{match?.max_players || 0}
-          </div>
-
-          <button className="leave-button" onClick={() => navigate("/")}>
-            Leave game
-          </button>
-        </div>
-      </header>
+      {/* Leave */}
+      <button className="leave-button" onClick={() => navigate("/")}>
+        Leave game
+      </button>
 
       {/* Orders */}
       <aside className="hud-orders">
@@ -1416,36 +1532,6 @@ function Game() {
           </div>
         )}
       </aside>
-
-      {/* Player */}
-      <div className="hud-panel hud-player">
-        <span className="hud-player-name">{user?.email}</span>
-
-        <span>Score 0</span>
-
-        <span>Coins 0</span>
-      </div>
-
-      {/* Controls */}
-      <footer className="hud-panel hud-controls">
-        <span>
-          <kbd>W</kbd>
-          <kbd>A</kbd>
-          <kbd>S</kbd>
-          <kbd>D</kbd>
-          Move
-        </span>
-
-        <span>
-          <kbd>E</kbd>
-          Interact
-        </span>
-
-        <span>
-          <kbd>Q</kbd>
-          Drop
-        </span>
-      </footer>
     </div>
   );
 }
