@@ -10,6 +10,10 @@ class GameRoom {
 
     this.nextItemId = 1;
 
+    // =====================================
+    // INGREDIENT SHELVES
+    // =====================================
+
     this.shelves = [
       new IngredientShelf({
         id: "meat-shelf",
@@ -17,28 +21,59 @@ class GameRoom {
         x: 160,
         y: 150,
       }),
+
+      new IngredientShelf({
+        id: "tomato-shelf",
+        ingredientType: "tomato",
+        x: 740,
+        y: 150,
+      }),
+
+      new IngredientShelf({
+        id: "salad-shelf",
+        ingredientType: "salad",
+        x: 980,
+        y: 150,
+      }),
     ];
 
-    // Các trạm làm việc. Sau này thêm CuttingStation,
-    // WashingStation... chỉ cần push vào mảng này.
+    // =====================================
+    // WORKING STATIONS
+    // =====================================
+
     this.stations = [
       new CookingStation({
         id: "grill",
         x: 450,
         y: 150,
-        cookTime: 5000, // 5 giây thì chín
-        burnTime: 10000, // 10 giây thì cháy
+        cookTime: 5000,
+        burnTime: 10000,
+
+        // Grill chỉ nhận meat
+        acceptedTypes: ["meat"],
       }),
     ];
   }
+
+  // =====================================
+  // SHELF
+  // =====================================
 
   getShelf(shelfId) {
     return this.shelves.find((shelf) => shelf.id === shelfId);
   }
 
+  // =====================================
+  // STATION
+  // =====================================
+
   getStation(stationId) {
     return this.stations.find((station) => station.id === stationId);
   }
+
+  // =====================================
+  // CREATE ITEM FROM SHELF
+  // =====================================
 
   createItemFromShelf(shelfId, userId) {
     const shelf = this.getShelf(shelfId);
@@ -58,6 +93,7 @@ class GameRoom {
       y: shelf.y,
     });
 
+    // Tạo xong thì người chơi cầm luôn
     if (!item.pick(userId)) {
       return null;
     }
@@ -66,6 +102,10 @@ class GameRoom {
 
     return item;
   }
+
+  // =====================================
+  // ITEM
+  // =====================================
 
   getItem(itemId) {
     return this.items.find((item) => item.id === itemId);
@@ -83,12 +123,19 @@ class GameRoom {
     return true;
   }
 
-  // Gọi định kỳ từ server. Trả về danh sách trạm vừa thay đổi.
+  // =====================================
+  // UPDATE
+  // =====================================
+
   update() {
     const now = Date.now();
 
     return this.stations.filter((station) => station.update(now));
   }
+
+  // =====================================
+  // GAME STATE
+  // =====================================
 
   getState() {
     return {
