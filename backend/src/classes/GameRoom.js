@@ -35,11 +35,31 @@ class GameRoom {
         x: 980,
         y: 150,
       }),
+
+      new IngredientShelf({
+        id: "bread-shelf",
+        ingredientType: "bread",
+        x: 160,
+        y: 300,
+      }),
+
+      new IngredientShelf({
+        id: "dough-shelf",
+        ingredientType: "dough",
+        x: 350,
+        y: 300,
+      }),
     ];
 
     // =====================================
     // WORKING STATIONS
     // =====================================
+
+    this.plateStation = {
+      id: "plate-station",
+      x: 550,
+      y: 350,
+    };
 
     this.stations = [
       // =====================================
