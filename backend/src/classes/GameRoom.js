@@ -1,7 +1,9 @@
 import Item from "./Item.js";
+import Plate from "./Plate.js";
 import IngredientShelf from "./IngredientShelf.js";
 import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
+
 class GameRoom {
   constructor(roomCode) {
     this.roomCode = roomCode;
@@ -138,6 +140,31 @@ class GameRoom {
   }
 
   // =====================================
+  // CREATE PLATE
+  // =====================================
+
+  createPlate(userId) {
+    const plateId = `${this.roomCode}-plate-${this.nextItemId}`;
+
+    this.nextItemId++;
+
+    const plate = new Plate({
+      id: plateId,
+      x: this.plateStation.x,
+      y: this.plateStation.y,
+    });
+
+    // Tạo xong thì người chơi cầm luôn
+    if (!plate.pick(userId)) {
+      return null;
+    }
+
+    this.items.push(plate);
+
+    return plate;
+  }
+
+  // =====================================
   // ITEM
   // =====================================
 
@@ -185,6 +212,12 @@ class GameRoom {
       })),
 
       stations: this.stations.map((station) => station.getState()),
+
+      plateStation: {
+        id: this.plateStation.id,
+        x: this.plateStation.x,
+        y: this.plateStation.y,
+      },
     };
   }
 }

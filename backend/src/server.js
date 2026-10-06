@@ -209,6 +209,93 @@ io.on("connection", (socket) => {
   );
 
   // ==========================================
+  // TAKE PLATE FROM PLATE STATION
+  // ==========================================
+
+  socket.on("take-plate", ({ roomCode, userId, playerX, playerY }) => {
+    console.log("===== TAKE PLATE RECEIVED =====");
+
+    console.log({
+      roomCode,
+      userId,
+      playerX,
+      playerY,
+    });
+
+    if (
+      !roomCode ||
+      !userId ||
+      typeof playerX !== "number" ||
+      typeof playerY !== "number"
+    ) {
+      console.log("Invalid take-plate data");
+
+      return;
+    }
+
+    const normalizedRoomCode = String(roomCode).toUpperCase();
+
+    const gameRoom = getGameRoom(normalizedRoomCode);
+
+    // ==========================================
+    // CHECK DISTANCE
+    // ==========================================
+
+    const plateStation = gameRoom.plateStation;
+
+    const distance = Math.sqrt(
+      Math.pow(playerX - plateStation.x, 2) +
+        Math.pow(playerY - plateStation.y, 2),
+    );
+
+    console.log("Distance to plate station:", distance);
+
+    const PLATE_RANGE = 90;
+
+    if (distance > PLATE_RANGE) {
+      console.log(`${userId} is too far from plate station`);
+
+      return;
+    }
+
+    // ==========================================
+    // PLAYER CAN ONLY HOLD ONE ITEM
+    // ==========================================
+
+    const alreadyHolding = gameRoom.items.some(
+      (item) => item.state === "held" && item.userId === userId,
+    );
+
+    if (alreadyHolding) {
+      console.log(`${userId} is already holding an item`);
+
+      return;
+    }
+
+    // ==========================================
+    // CREATE PLATE
+    // ==========================================
+
+    const plate = gameRoom.createPlate(userId);
+
+    if (!plate) {
+      console.log("Failed to create plate");
+
+      return;
+    }
+
+    console.log(`${userId} took plate (${plate.id})`);
+
+    // ==========================================
+    // BROADCAST
+    // ==========================================
+
+    io.to(normalizedRoomCode).emit("item-created", {
+      item: plate.serialize(),
+    });
+  });
+
+  // ==========================================
   // PICK UP DROPPED ITEM
   // ==========================================
 
