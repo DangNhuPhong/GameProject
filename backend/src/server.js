@@ -6,6 +6,18 @@ import GameRoom from "./classes/GameRoom.js";
 
 const PORT = process.env.PORT || 5000;
 
+// ==========================================
+// KHÔNG ĐỂ LỖI BẤT NGỜ LÀM SẬP SERVER
+// ==========================================
+
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("unhandledRejection:", err);
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -38,11 +50,27 @@ function getGameRoom(roomCode) {
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
+  // Bọc mọi handler trong try/catch:
+  // một lỗi trong handler chỉ bị log, không làm sập process.
+  const handle = (eventName, fn) => {
+    socket.on(eventName, (payload) => {
+      try {
+        fn(payload || {});
+      } catch (err) {
+        console.error(`Error in "${eventName}":`, err);
+
+        socket.emit("interaction-error", {
+          message: `Server error in ${eventName}`,
+        });
+      }
+    });
+  };
+
   // ==========================================
   // JOIN ROOM
   // ==========================================
 
-  socket.on("join-room", ({ roomCode, userId }) => {
+  handle("join-room", ({ roomCode, userId }) => {
     if (!roomCode || !userId) {
       return;
     }
@@ -75,7 +103,7 @@ io.on("connection", (socket) => {
   // PLAYER READY
   // ==========================================
 
-  socket.on("player-ready", ({ roomCode, userId, ready }) => {
+  handle("player-ready", ({ roomCode, userId, ready }) => {
     if (!roomCode || !userId) {
       return;
     }
@@ -94,7 +122,7 @@ io.on("connection", (socket) => {
   // GAME STARTED
   // ==========================================
 
-  socket.on("game-started", ({ roomCode }) => {
+  handle("game-started", ({ roomCode }) => {
     if (!roomCode) {
       return;
     }
@@ -112,7 +140,7 @@ io.on("connection", (socket) => {
   // PLAYER POSITION
   // ==========================================
 
-  socket.on("player-position", ({ roomCode, userId, x, y }) => {
+  handle("player-position", ({ roomCode, userId, x, y }) => {
     if (
       !roomCode ||
       !userId ||
@@ -135,18 +163,12 @@ io.on("connection", (socket) => {
   // TAKE INGREDIENT FROM SHELF
   // ==========================================
 
-  socket.on(
+  handle(
     "take-ingredient",
     ({ roomCode, userId, shelfId, playerX, playerY }) => {
       console.log("===== TAKE INGREDIENT RECEIVED =====");
 
-      console.log({
-        roomCode,
-        userId,
-        shelfId,
-        playerX,
-        playerY,
-      });
+      console.log({ roomCode, userId, shelfId, playerX, playerY });
 
       if (
         !roomCode ||
@@ -212,15 +234,10 @@ io.on("connection", (socket) => {
   // TAKE PLATE FROM PLATE STATION
   // ==========================================
 
-  socket.on("take-plate", ({ roomCode, userId, playerX, playerY }) => {
+  handle("take-plate", ({ roomCode, userId, playerX, playerY }) => {
     console.log("===== TAKE PLATE RECEIVED =====");
 
-    console.log({
-      roomCode,
-      userId,
-      playerX,
-      playerY,
-    });
+    console.log({ roomCode, userId, playerX, playerY });
 
     if (
       !roomCode ||
@@ -237,10 +254,7 @@ io.on("connection", (socket) => {
 
     const gameRoom = getGameRoom(normalizedRoomCode);
 
-    // ==========================================
     // CHECK DISTANCE
-    // ==========================================
-
     const plateStation = gameRoom.plateStation;
 
     const distance = Math.sqrt(
@@ -258,10 +272,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // ==========================================
     // PLAYER CAN ONLY HOLD ONE ITEM
-    // ==========================================
-
     const alreadyHolding = gameRoom.items.some(
       (item) => item.state === "held" && item.userId === userId,
     );
@@ -272,10 +283,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // ==========================================
     // CREATE PLATE
-    // ==========================================
-
     const plate = gameRoom.createPlate(userId);
 
     if (!plate) {
@@ -286,10 +294,6 @@ io.on("connection", (socket) => {
 
     console.log(`${userId} took plate (${plate.id})`);
 
-    // ==========================================
-    // BROADCAST
-    // ==========================================
-
     io.to(normalizedRoomCode).emit("item-created", {
       item: plate.serialize(),
     });
@@ -299,127 +303,93 @@ io.on("connection", (socket) => {
   // PICK UP DROPPED ITEM
   // ==========================================
 
-  socket.on(
-    "pick-up-item",
-    ({ roomCode, userId, itemId, playerX, playerY }) => {
-      console.log("===== PICK UP ITEM RECEIVED =====");
+  handle("pick-up-item", ({ roomCode, userId, itemId, playerX, playerY }) => {
+    console.log("===== PICK UP ITEM RECEIVED =====");
 
-      console.log({
-        roomCode,
-        userId,
-        itemId,
-        playerX,
-        playerY,
-      });
+    console.log({ roomCode, userId, itemId, playerX, playerY });
 
-      if (
-        !roomCode ||
-        !userId ||
-        !itemId ||
-        typeof playerX !== "number" ||
-        typeof playerY !== "number"
-      ) {
-        console.log("Invalid pick-up-item data");
+    if (
+      !roomCode ||
+      !userId ||
+      !itemId ||
+      typeof playerX !== "number" ||
+      typeof playerY !== "number"
+    ) {
+      console.log("Invalid pick-up-item data");
 
-        return;
-      }
+      return;
+    }
 
-      const normalizedRoomCode = String(roomCode).toUpperCase();
+    const normalizedRoomCode = String(roomCode).toUpperCase();
 
-      const gameRoom = getGameRoom(normalizedRoomCode);
+    const gameRoom = getGameRoom(normalizedRoomCode);
 
-      // ==========================================
-      // CHECK CURRENT PLAYER ALREADY HOLDS ITEM
-      // ==========================================
+    // CHECK CURRENT PLAYER ALREADY HOLDS ITEM
+    const alreadyHolding = gameRoom.items.some(
+      (item) => item.state === "held" && item.userId === userId,
+    );
 
-      const alreadyHolding = gameRoom.items.some(
-        (item) => item.state === "held" && item.userId === userId,
-      );
+    if (alreadyHolding) {
+      console.log(`${userId} is already holding an item`);
 
-      if (alreadyHolding) {
-        console.log(`${userId} is already holding an item`);
+      return;
+    }
 
-        return;
-      }
+    // GET ITEM
+    const item = gameRoom.getItem(itemId);
 
-      // ==========================================
-      // GET ITEM
-      // ==========================================
+    if (!item) {
+      console.log(`Item not found: ${itemId}`);
 
-      const item = gameRoom.getItem(itemId);
+      return;
+    }
 
-      if (!item) {
-        console.log(`Item not found: ${itemId}`);
+    // ITEM MUST BE AVAILABLE
+    if (item.state !== "available") {
+      console.log(`Item ${itemId} is not available`);
 
-        return;
-      }
+      return;
+    }
 
-      // ==========================================
-      // ITEM MUST BE AVAILABLE
-      // ==========================================
+    // CHECK DISTANCE
+    const distance = Math.sqrt(
+      Math.pow(playerX - item.x, 2) + Math.pow(playerY - item.y, 2),
+    );
 
-      if (item.state !== "available") {
-        console.log(`Item ${itemId} is not available`);
+    console.log("Distance to item:", distance);
 
-        return;
-      }
+    const PICKUP_RANGE = 60;
 
-      // ==========================================
-      // CHECK DISTANCE
-      // ==========================================
+    if (distance > PICKUP_RANGE) {
+      console.log(`${userId} is too far from item ${itemId}`);
 
-      const distance = Math.sqrt(
-        Math.pow(playerX - item.x, 2) + Math.pow(playerY - item.y, 2),
-      );
+      return;
+    }
 
-      console.log("Distance to item:", distance);
+    // PICK ITEM
+    const picked = item.pick(userId);
 
-      const PICKUP_RANGE = 60;
+    if (!picked) {
+      console.log(`Failed to pick item ${itemId}`);
 
-      if (distance > PICKUP_RANGE) {
-        console.log(`${userId} is too far from item ${itemId}`);
+      return;
+    }
 
-        return;
-      }
+    console.log(`${userId} picked ${item.type} (${item.id})`);
 
-      // ==========================================
-      // PICK ITEM
-      // ==========================================
-
-      const picked = item.pick(userId);
-
-      if (!picked) {
-        console.log(`Failed to pick item ${itemId}`);
-
-        return;
-      }
-
-      console.log(`${userId} picked ${item.type} (${item.id})`);
-
-      // ==========================================
-      // BROADCAST
-      // ==========================================
-
-      io.to(normalizedRoomCode).emit("item-picked", {
-        item: item.serialize(),
-      });
-    },
-  );
+    io.to(normalizedRoomCode).emit("item-picked", {
+      item: item.serialize(),
+    });
+  });
 
   // ==========================================
   // DROP ITEM
   // ==========================================
 
-  socket.on("drop-item", ({ roomCode, userId, itemId, x, y }) => {
+  handle("drop-item", ({ roomCode, userId, itemId, x, y }) => {
     console.log("===== DROP ITEM RECEIVED =====");
 
-    console.log({
-      roomCode,
-      userId,
-      itemId,
-      x,
-      y,
-    });
+    console.log({ roomCode, userId, itemId, x, y });
 
     if (!roomCode || !userId || !itemId) {
       return;
@@ -437,8 +407,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Only the player holding
-    // the item can drop it.
+    // Only the player holding the item can drop it.
     if (item.state !== "held" || item.userId !== userId) {
       console.log(`${userId} cannot drop item ${itemId}`);
 
@@ -468,7 +437,7 @@ io.on("connection", (socket) => {
   // PLACE ITEM ON STATION (Grill, ...)
   // ==========================================
 
-  socket.on(
+  handle(
     "place-on-station",
     ({ roomCode, userId, stationId, itemId, playerX, playerY }) => {
       if (
@@ -528,7 +497,7 @@ io.on("connection", (socket) => {
   // TAKE ITEM FROM STATION
   // ==========================================
 
-  socket.on(
+  handle(
     "take-from-station",
     ({ roomCode, userId, stationId, playerX, playerY }) => {
       if (
@@ -588,10 +557,19 @@ io.on("connection", (socket) => {
   // ADD INGREDIENT TO PLATE
   // ==========================================
 
-  socket.on(
+  handle(
     "add-ingredient-to-plate",
     ({ roomCode, userId, plateId, itemId, playerX, playerY }) => {
-      console.log("Received add-ingredient-to-plate:", data);
+      // (đã sửa: trước đây log biến `data` không tồn tại → ReferenceError → sập server)
+      console.log("Received add-ingredient-to-plate:", {
+        roomCode,
+        userId,
+        plateId,
+        itemId,
+        playerX,
+        playerY,
+      });
+
       if (
         !roomCode ||
         !userId ||
@@ -640,9 +618,9 @@ io.on("connection", (socket) => {
       // GameRoom kiểm tra người cầm item và thêm nguyên liệu
       const result = gameRoom.addIngredientToPlate(plateId, itemId, userId);
 
-      if (!result.success) {
+      if (!result || !result.success) {
         socket.emit("interaction-error", {
-          message: result.message,
+          message: result?.message || "Cannot add ingredient to plate",
         });
         return;
       }
@@ -671,20 +649,23 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const gameRoom = getGameRoom(roomCode);
+    try {
+      const gameRoom = getGameRoom(roomCode);
 
-    // Release items held by
-    // disconnected player.
-    for (const item of gameRoom.items) {
-      if (item.state === "held" && item.userId === userId) {
-        item.state = "available";
-        item.userId = null;
+      // Release items held by disconnected player.
+      for (const item of gameRoom.items) {
+        if (item.state === "held" && item.userId === userId) {
+          item.state = "available";
+          item.userId = null;
 
-        console.log(`Released ${item.type} (${item.id}) after disconnect`);
+          console.log(`Released ${item.type} (${item.id}) after disconnect`);
+        }
       }
-    }
 
-    io.to(roomCode).emit("game-state", gameRoom.getState());
+      io.to(roomCode).emit("game-state", gameRoom.getState());
+    } catch (err) {
+      console.error('Error in "disconnect":', err);
+    }
   });
 });
 
@@ -693,15 +674,19 @@ io.on("connection", (socket) => {
 // ==========================================
 
 setInterval(() => {
-  for (const gameRoom of Object.values(gameRooms)) {
-    const changedStations = gameRoom.update();
+  try {
+    for (const gameRoom of Object.values(gameRooms)) {
+      const changedStations = gameRoom.update();
 
-    for (const station of changedStations) {
-      io.to(gameRoom.roomCode).emit("station-updated", {
-        station: station.getState(),
-        item: station.item ? station.item.serialize() : null,
-      });
+      for (const station of changedStations) {
+        io.to(gameRoom.roomCode).emit("station-updated", {
+          station: station.getState(),
+          item: station.item ? station.item.serialize() : null,
+        });
+      }
     }
+  } catch (err) {
+    console.error("Error in station tick:", err);
   }
 }, 200);
 
