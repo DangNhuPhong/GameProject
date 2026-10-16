@@ -192,6 +192,65 @@ class GameRoom {
   }
 
   // =====================================
+  // ADD INGREDIENT TO PLATE
+  // =====================================
+
+  addIngredientToPlate(plateId, itemId, userId) {
+    const plate = this.getItem(plateId);
+    const item = this.getItem(itemId);
+
+    // Đĩa và nguyên liệu phải tồn tại
+    if (!plate || !item) {
+      return {
+        success: false,
+        message: "Plate or ingredient not found",
+      };
+    }
+
+    // Chỉ được thêm nguyên liệu vào đĩa
+    if (plate.type !== "plate" || item.type === "plate") {
+      return {
+        success: false,
+        message: "Invalid plate or ingredient",
+      };
+    }
+
+    // Đĩa phải đang nằm trên mặt đất / ở trạng thái available
+    if (plate.state !== "available") {
+      return {
+        success: false,
+        message: "Plate must be placed down first",
+      };
+    }
+
+    // Nguyên liệu phải do người chơi hiện tại cầm
+    if (item.state !== "held" || item.userId !== userId) {
+      return {
+        success: false,
+        message: "You are not holding this ingredient",
+      };
+    }
+
+    // Thêm nguyên liệu vào đĩa
+    const added = plate.addIngredient(item);
+
+    if (!added) {
+      return {
+        success: false,
+        message: "Cannot add this ingredient to the plate",
+      };
+    }
+
+    // Xóa nguyên liệu riêng khỏi danh sách item trong phòng
+    this.removeItem(itemId);
+
+    return {
+      success: true,
+      plate,
+    };
+  }
+
+  // =====================================
   // UPDATE
   // =====================================
 

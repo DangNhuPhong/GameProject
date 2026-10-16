@@ -1,18 +1,16 @@
 class Plate {
   constructor({ id, x = 0, y = 0 }) {
     this.id = id;
-
     this.type = "plate";
 
     this.x = x;
     this.y = y;
 
-    // Item đang được đặt trên đĩa
+    // Các nguyên liệu đang nằm trên đĩa
     this.ingredients = [];
 
     // available / held
     this.state = "available";
-
     this.userId = null;
   }
 
@@ -50,20 +48,86 @@ class Plate {
   }
 
   // =====================================
-  // ADD INGREDIENT
+  // CHECK INGREDIENT
   // =====================================
 
-  addIngredient(item) {
+  canAcceptIngredient(item) {
     if (!item) {
       return false;
     }
 
+    // Không cho đặt một chiếc đĩa khác lên đĩa này
+    if (item.type === "plate") {
+      return false;
+    }
+
+    // Không thêm cùng một item hai lần
+    if (
+      item.id != null &&
+      this.ingredients.some((ingredient) => ingredient.id === item.id)
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // =====================================
+  // ADD INGREDIENT TO PLATE
+  // =====================================
+
+  addIngredient(item) {
+    if (!this.canAcceptIngredient(item)) {
+      return false;
+    }
+
     this.ingredients.push({
+      id: item.id ?? null,
       type: item.type,
-      status: item.status,
+      status: item.status ?? "raw",
     });
 
     return true;
+  }
+
+  // =====================================
+  // CHECK PLATE CONTENTS
+  // =====================================
+
+  hasIngredient(type) {
+    return this.ingredients.some((ingredient) => ingredient.type === type);
+  }
+
+  // =====================================
+  // REMOVE INGREDIENT
+  // =====================================
+
+  removeIngredient(itemId) {
+    const index = this.ingredients.findIndex(
+      (ingredient) => ingredient.id === itemId,
+    );
+
+    if (index === -1) {
+      return null;
+    }
+
+    return this.ingredients.splice(index, 1)[0];
+  }
+
+  // =====================================
+  // CHECK PIZZA INGREDIENTS
+  // =====================================
+
+  hasPizzaIngredients() {
+    return this.hasIngredient("dough") && this.hasIngredient("tomato");
+  }
+
+  // =====================================
+  // CLEAR PLATE
+  // =====================================
+
+  clearIngredients() {
+    this.ingredients = [];
   }
 
   // =====================================
@@ -74,14 +138,13 @@ class Plate {
     return {
       id: this.id,
       type: this.type,
-
       x: this.x,
       y: this.y,
-
       state: this.state,
       userId: this.userId,
-
-      ingredients: this.ingredients,
+      ingredients: this.ingredients.map((ingredient) => ({
+        ...ingredient,
+      })),
     };
   }
 }

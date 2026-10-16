@@ -585,6 +585,78 @@ io.on("connection", (socket) => {
   );
 
   // ==========================================
+  // ADD INGREDIENT TO PLATE
+  // ==========================================
+
+  socket.on(
+    "add-ingredient-to-plate",
+    ({ roomCode, userId, plateId, itemId, playerX, playerY }) => {
+      console.log("Received add-ingredient-to-plate:", data);
+      if (
+        !roomCode ||
+        !userId ||
+        !plateId ||
+        !itemId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        return;
+      }
+
+      const normalizedRoomCode = String(roomCode).toUpperCase();
+
+      // Socket phải thuộc đúng phòng và người chơi
+      if (
+        socket.data.roomCode !== normalizedRoomCode ||
+        socket.data.userId !== userId
+      ) {
+        return;
+      }
+
+      const gameRoom = getGameRoom(normalizedRoomCode);
+      const plate = gameRoom.getItem(plateId);
+
+      if (!plate || plate.type !== "plate") {
+        socket.emit("interaction-error", {
+          message: "Plate not found",
+        });
+        return;
+      }
+
+      // Kiểm tra khoảng cách tới đĩa
+      const distance = Math.sqrt(
+        Math.pow(playerX - plate.x, 2) + Math.pow(playerY - plate.y, 2),
+      );
+
+      const PLATE_RANGE = 90;
+
+      if (distance > PLATE_RANGE) {
+        socket.emit("interaction-error", {
+          message: "Too far from plate",
+        });
+        return;
+      }
+
+      // GameRoom kiểm tra người cầm item và thêm nguyên liệu
+      const result = gameRoom.addIngredientToPlate(plateId, itemId, userId);
+
+      if (!result.success) {
+        socket.emit("interaction-error", {
+          message: result.message,
+        });
+        return;
+      }
+
+      console.log(`${userId} added ${itemId} to plate ${plateId}`);
+
+      // Đồng bộ toàn bộ trạng thái phòng:
+      // - nguyên liệu riêng đã bị xóa
+      // - đĩa có ingredients mới
+      io.to(normalizedRoomCode).emit("game-state", gameRoom.getState());
+    },
+  );
+
+  // ==========================================
   // DISCONNECT
   // ==========================================
 
