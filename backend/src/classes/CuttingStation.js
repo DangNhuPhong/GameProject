@@ -20,12 +20,14 @@ class CuttingStation extends Station {
     y = 0,
     cutTime = 2000,
     acceptedTypes = ["tomato"],
+    range = 34, // khớp INTERACT_RANGE của client
   }) {
     super({
       id,
       type: "cutting",
       x,
       y,
+      range,
     });
 
     this.cutTime = cutTime;
@@ -109,9 +111,9 @@ class CuttingStation extends Station {
     // Người thái rời khỏi khu vực (hoặc đã thoát game) -> tạm dừng
     if (getPlayerPosition) {
       const pos = getPlayerPosition(this.cuttingUserId);
-      console.log("cutting check:", this.cuttingUserId, pos);
 
-      if (!pos || !this.canUse(pos.x, pos.y)) {
+      // +8: dung sai vì vị trí client gửi lên bị làm tròn / trễ
+      if (!pos || !this.canUse(pos.x, pos.y, this.range + 8)) {
         // Cộng nốt phần thời gian đã thái trước khi rời đi
         this.progressMs = Math.min(
           this.cutTime,

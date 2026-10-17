@@ -5,17 +5,17 @@ import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
 
 // =====================================
-// LAYOUT  (phải khớp với LAYOUT trong Game.jsx)
+// LAYOUT  (khớp với KitchenScene: bản đồ 256 x 176)
 //
-//  Quầy tường (y = 150)
-//  Meat(110) → Grill(280) | Tomato(470) → Cutting(640) | Salad(830)
+//  Quầy tường (y = 24)
+//  Meat(32) → Grill(80) | Tomato(128) → Cutting(176) | Salad(224)
 //
-//  Đảo giữa phòng (y = 400)
-//  Bread(300) | Dough(470) | Plates(800)
+//  Đảo giữa phòng (y = 88)
+//  Bread(80) | Dough(128) | Plates(176)
 // =====================================
 
-const COUNTER_Y = 150;
-const ISLAND_Y = 400;
+const COUNTER_Y = 24;
+const ISLAND_Y = 88;
 
 class GameRoom {
   constructor(roomCode) {
@@ -33,35 +33,35 @@ class GameRoom {
       new IngredientShelf({
         id: "meat-shelf",
         ingredientType: "meat",
-        x: 110,
+        x: 32,
         y: COUNTER_Y,
       }),
 
       new IngredientShelf({
         id: "tomato-shelf",
         ingredientType: "tomato",
-        x: 470,
+        x: 128,
         y: COUNTER_Y,
       }),
 
       new IngredientShelf({
         id: "salad-shelf",
         ingredientType: "salad",
-        x: 830,
+        x: 224,
         y: COUNTER_Y,
       }),
 
       new IngredientShelf({
         id: "bread-shelf",
         ingredientType: "bread",
-        x: 300,
+        x: 80,
         y: ISLAND_Y,
       }),
 
       new IngredientShelf({
         id: "dough-shelf",
         ingredientType: "dough",
-        x: 470,
+        x: 128,
         y: ISLAND_Y,
       }),
     ];
@@ -72,7 +72,7 @@ class GameRoom {
 
     this.plateStation = {
       id: "plate-station",
-      x: 800,
+      x: 176,
       y: ISLAND_Y,
     };
 
@@ -80,7 +80,7 @@ class GameRoom {
       // GRILL
       new CookingStation({
         id: "grill",
-        x: 280,
+        x: 80,
         y: COUNTER_Y,
         cookTime: 5000,
         burnTime: 10000,
@@ -90,7 +90,7 @@ class GameRoom {
       // CUTTING BOARD
       new CuttingStation({
         id: "cutting-board",
-        x: 640,
+        x: 176,
         y: COUNTER_Y,
         cutTime: 2000,
         acceptedTypes: ["tomato", "salad"],
