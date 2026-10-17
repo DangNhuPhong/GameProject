@@ -718,6 +718,9 @@ io.on("connection", (socket) => {
       // Xóa vị trí -> thớt đang được người này thái sẽ tạm dừng
       playerPositions.delete(positionKey(roomCode, userId));
 
+      // Báo cho người còn lại xoá nhân vật này (nếu không sẽ thành "bóng ma" chặn đường)
+      socket.to(roomCode).emit("player-left", { userId });
+
       // Release items held by disconnected player.
       for (const item of gameRoom.items) {
         if (item.state === "held" && item.userId === userId) {
