@@ -153,7 +153,7 @@ io.on("connection", (socket) => {
   // PLAYER POSITION
   // ==========================================
 
-  handle("player-position", ({ roomCode, userId, x, y }) => {
+  handle("player-position", ({ roomCode, userId, x, y, t }) => {
     if (
       !roomCode ||
       !userId ||
@@ -168,10 +168,12 @@ io.on("connection", (socket) => {
     // Lưu vị trí để server kiểm tra khoảng cách (thớt thái...)
     playerPositions.set(positionKey(normalizedRoomCode, userId), { x, y });
 
-    socket.to(normalizedRoomCode).emit("player-position", {
+    // volatile: gói cũ bị bỏ nếu client chưa kịp nhận, tránh dồn cục
+    socket.to(normalizedRoomCode).volatile.emit("player-position", {
       userId,
       x,
       y,
+      t: typeof t === "number" ? t : Date.now(),
     });
   });
 
