@@ -109,6 +109,7 @@ class CuttingStation extends Station {
     // Người thái rời khỏi khu vực (hoặc đã thoát game) -> tạm dừng
     if (getPlayerPosition) {
       const pos = getPlayerPosition(this.cuttingUserId);
+      console.log("cutting check:", this.cuttingUserId, pos);
 
       if (!pos || !this.canUse(pos.x, pos.y)) {
         // Cộng nốt phần thời gian đã thái trước khi rời đi
