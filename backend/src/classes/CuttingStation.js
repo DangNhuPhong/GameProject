@@ -102,13 +102,6 @@ class CuttingStation extends Station {
   // =====================================
 
   update(now = Date.now(), getPlayerPosition = null) {
-    if (this.cutState === "cutting") {
-      console.log(
-        "cutting",
-        this.cuttingUserId,
-        getPlayerPosition?.(this.cuttingUserId),
-      );
-    }
     if (this.cutState !== "cutting" || !this.item) {
       return false;
     }

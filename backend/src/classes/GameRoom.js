@@ -252,9 +252,12 @@ class GameRoom {
 
   // =====================================
   // UPDATE
+  //
+  // getPlayerPosition(userId) -> { x, y } | null
+  // Trạm thái dùng nó để tạm dừng khi người chơi rời đi.
   // =====================================
 
-  update(getPlayerPosition) {
+  update(getPlayerPosition = null) {
     const now = Date.now();
 
     return this.stations.filter((station) =>
