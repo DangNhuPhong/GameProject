@@ -3,7 +3,14 @@ import Station from "./Station.js";
 // =====================================
 // CUTTING STATION
 //
-// raw tomato --(cutTime)--> chopped tomato
+// raw tomato --(E: thái)--> chopped tomato
+//
+// cutState:
+//   idle    : có item nhưng chưa bắt đầu thái
+//   cutting : đang thái
+//   paused  : người thái rời khu vực -> giữ nguyên tiến độ,
+//             quay lại bấm E để thái tiếp
+//   done    : thái xong (item.status = "chopped")
 // =====================================
 
 class CuttingStation extends Station {
@@ -24,7 +31,10 @@ class CuttingStation extends Station {
     this.cutTime = cutTime;
     this.acceptedTypes = acceptedTypes;
 
-    this.startedAt = null;
+    this.cutState = "idle";
+    this.progressMs = 0; // số ms đã thái được
+    this.lastTick = null; // mốc thời gian của lần tính trước
+    this.cuttingUserId = null; // người đang thái
   }
 
   // =====================================
@@ -40,34 +50,92 @@ class CuttingStation extends Station {
   }
 
   // =====================================
-  // ITEM PLACED
+  // ITEM PLACED / TAKEN
   // =====================================
 
   onItemPlaced() {
-    this.startedAt = Date.now();
+    this.resetCutting();
+  }
+
+  onItemTaken() {
+    this.resetCutting();
+  }
+
+  resetCutting() {
+    this.cutState = "idle";
+    this.progressMs = 0;
+    this.lastTick = null;
+    this.cuttingUserId = null;
   }
 
   // =====================================
-  // ITEM TAKEN
+  // START / RESUME (người chơi bấm E)
   // =====================================
 
-  onItemTaken() {
-    this.startedAt = null;
+  startCutting(userId, playerX, playerY) {
+    if (!this.item || this.item.status !== "raw") {
+      return false;
+    }
+
+    // Phải đứng trong khu vực thái
+    if (!this.canUse(playerX, playerY)) {
+      return false;
+    }
+
+    // Chỉ bắt đầu được khi chưa thái hoặc đang tạm dừng
+    if (this.cutState !== "idle" && this.cutState !== "paused") {
+      return false;
+    }
+
+    this.cutState = "cutting";
+    this.cuttingUserId = userId;
+    this.lastTick = Date.now();
+
+    return true;
   }
 
   // =====================================
   // UPDATE
+  //
+  // getPlayerPosition(userId) -> { x, y } | null
+  // Trả về true khi trạng thái đổi (paused / done)
   // =====================================
 
-  update(now = Date.now()) {
-    if (!this.item || this.startedAt === null) {
+  update(now = Date.now(), getPlayerPosition = null) {
+    if (this.cutState !== "cutting" || !this.item) {
       return false;
     }
 
-    const elapsed = now - this.startedAt;
+    // Người thái rời khỏi khu vực (hoặc đã thoát game) -> tạm dừng
+    if (getPlayerPosition) {
+      const pos = getPlayerPosition(this.cuttingUserId);
 
-    if (this.item.status === "raw" && elapsed >= this.cutTime) {
+      if (!pos || !this.canUse(pos.x, pos.y)) {
+        // Cộng nốt phần thời gian đã thái trước khi rời đi
+        this.progressMs = Math.min(
+          this.cutTime,
+          this.progressMs + (now - this.lastTick),
+        );
+
+        this.cutState = "paused";
+        this.lastTick = null;
+        this.cuttingUserId = null;
+
+        return true;
+      }
+    }
+
+    // Cộng dồn tiến độ
+    this.progressMs += now - this.lastTick;
+    this.lastTick = now;
+
+    if (this.progressMs >= this.cutTime) {
+      this.progressMs = this.cutTime;
       this.item.status = "chopped";
+
+      this.cutState = "done";
+      this.lastTick = null;
+      this.cuttingUserId = null;
 
       return true;
     }
@@ -80,12 +148,23 @@ class CuttingStation extends Station {
   // =====================================
 
   getState() {
+    // Tiến độ "live" để client vẽ thanh tiến độ
+    let elapsedMs = this.progressMs;
+
+    if (this.cutState === "cutting" && this.lastTick !== null) {
+      elapsedMs = Math.min(
+        this.cutTime,
+        this.progressMs + (Date.now() - this.lastTick),
+      );
+    }
+
     return {
       ...super.getState(),
 
       cutTime: this.cutTime,
-
-      elapsedMs: this.startedAt === null ? 0 : Date.now() - this.startedAt,
+      cutState: this.cutState,
+      cuttingUserId: this.cuttingUserId,
+      elapsedMs,
     };
   }
 }

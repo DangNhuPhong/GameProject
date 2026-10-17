@@ -254,10 +254,12 @@ class GameRoom {
   // UPDATE
   // =====================================
 
-  update() {
+  update(getPlayerPosition) {
     const now = Date.now();
 
-    return this.stations.filter((station) => station.update(now));
+    return this.stations.filter((station) =>
+      station.update(now, getPlayerPosition),
+    );
   }
 
   // =====================================
