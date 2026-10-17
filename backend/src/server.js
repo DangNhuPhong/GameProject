@@ -44,6 +44,19 @@ function getGameRoom(roomCode) {
 }
 
 // ==========================================
+// PLAYER POSITIONS
+// Server lưu vị trí mới nhất của từng người chơi
+// để các trạm (thớt thái...) kiểm tra khoảng cách.
+// key = "ROOMCODE:userId"
+// ==========================================
+
+const playerPositions = new Map();
+
+function positionKey(roomCode, userId) {
+  return `${roomCode}:${userId}`;
+}
+
+// ==========================================
 // SOCKET CONNECTION
 // ==========================================
 
@@ -151,6 +164,9 @@ io.on("connection", (socket) => {
     }
 
     const normalizedRoomCode = String(roomCode).toUpperCase();
+
+    // Lưu vị trí để server kiểm tra khoảng cách (thớt thái...)
+    playerPositions.set(positionKey(normalizedRoomCode, userId), { x, y });
 
     socket.to(normalizedRoomCode).emit("player-position", {
       userId,
@@ -434,7 +450,7 @@ io.on("connection", (socket) => {
   });
 
   // ==========================================
-  // PLACE ITEM ON STATION (Grill, ...)
+  // PLACE ITEM ON STATION (Grill, Cutting...)
   // ==========================================
 
   handle(
@@ -554,13 +570,60 @@ io.on("connection", (socket) => {
   );
 
   // ==========================================
+  // START / RESUME CUTTING (bấm E)
+  // ==========================================
+
+  handle(
+    "start-cutting",
+    ({ roomCode, userId, stationId, playerX, playerY }) => {
+      if (
+        !roomCode ||
+        !userId ||
+        !stationId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        return;
+      }
+
+      const normalizedRoomCode = String(roomCode).toUpperCase();
+
+      const gameRoom = getGameRoom(normalizedRoomCode);
+
+      const station = gameRoom.getStation(stationId);
+
+      if (!station || station.type !== "cutting") {
+        return;
+      }
+
+      // Cập nhật vị trí mới nhất để tick không pause nhầm
+      playerPositions.set(positionKey(normalizedRoomCode, userId), {
+        x: playerX,
+        y: playerY,
+      });
+
+      if (!station.startCutting(userId, playerX, playerY)) {
+        console.log(`${userId} cannot start cutting at ${stationId}`);
+
+        return;
+      }
+
+      console.log(`${userId} started cutting at ${stationId}`);
+
+      io.to(normalizedRoomCode).emit("station-updated", {
+        station: station.getState(),
+        item: station.item ? station.item.serialize() : null,
+      });
+    },
+  );
+
+  // ==========================================
   // ADD INGREDIENT TO PLATE
   // ==========================================
 
   handle(
     "add-ingredient-to-plate",
     ({ roomCode, userId, plateId, itemId, playerX, playerY }) => {
-      // (đã sửa: trước đây log biến `data` không tồn tại → ReferenceError → sập server)
       console.log("Received add-ingredient-to-plate:", {
         roomCode,
         userId,
@@ -652,6 +715,9 @@ io.on("connection", (socket) => {
     try {
       const gameRoom = getGameRoom(roomCode);
 
+      // Xóa vị trí -> thớt đang được người này thái sẽ tạm dừng
+      playerPositions.delete(positionKey(roomCode, userId));
+
       // Release items held by disconnected player.
       for (const item of gameRoom.items) {
         if (item.state === "held" && item.userId === userId) {
@@ -670,13 +736,16 @@ io.on("connection", (socket) => {
 });
 
 // ==========================================
-// STATION TICK (nướng chín / cháy...)
+// STATION TICK (nướng chín / cháy / thái...)
 // ==========================================
 
 setInterval(() => {
   try {
     for (const gameRoom of Object.values(gameRooms)) {
-      const changedStations = gameRoom.update();
+      const changedStations = gameRoom.update(
+        (userId) =>
+          playerPositions.get(positionKey(gameRoom.roomCode, userId)) ?? null,
+      );
 
       for (const station of changedStations) {
         io.to(gameRoom.roomCode).emit("station-updated", {
