@@ -26,6 +26,10 @@ const FEET_BOTTOM = 7;
 // Tốc độ (pixel / giây)
 const PLAYER_SPEED = 75;
 
+// Hộp va chạm giữa 2 người chơi (2 người phải cách nhau ít nhất từng này pixel)
+const PLAYER_BLOCK_W = 10;
+const PLAYER_BLOCK_H = 8;
+
 // ⚠ Phải khớp với server (Station.range, IngredientShelf.canTake, PLATE_RANGE)
 const INTERACT_RANGE = 34;
 
@@ -462,6 +466,19 @@ export function createKitchenScene({ user, roomCode }) {
         console.log("Player joined:", userId);
       });
 
+      on("player-left", ({ userId }) => {
+        const other = this.otherPlayers[userId];
+
+        if (!other) {
+          return;
+        }
+
+        other.player.destroy();
+        other.shadow.destroy();
+
+        delete this.otherPlayers[userId];
+      });
+
       // Rớt mạng: bỏ trạng thái "đang cầm" để không bị kẹt tay
       on("disconnect", () => {
         this.heldItemId = null;
@@ -500,6 +517,32 @@ export function createKitchenScene({ user, roomCode }) {
           py > WORLD_H ||
           this.counters.hasTileAtWorldXY(px, py),
       );
+    }
+
+    // =====================================
+    // COLLISION GIỮA NGƯỜI CHƠI
+    //
+    // Chặn bước đi nếu vị trí mới chạm người khác.
+    // Nếu đang chồng nhau sẵn (vd. cùng điểm spawn) thì vẫn cho bước
+    // khi bước đó làm 2 người xa nhau hơn -> tự tách ra, không bị kẹt.
+    // =====================================
+
+    blockedByOtherPlayer(x, y) {
+      return Object.values(this.otherPlayers).some((other) => {
+        const newDx = Math.abs(x - other.lastX);
+        const newDy = Math.abs(y - other.lastY);
+
+        if (newDx >= PLAYER_BLOCK_W || newDy >= PLAYER_BLOCK_H) {
+          return false;
+        }
+
+        const nowDist = Math.hypot(
+          this.player.x - other.lastX,
+          this.player.y - other.lastY,
+        );
+
+        return Math.hypot(newDx, newDy) < nowDist;
+      });
     }
 
     // =====================================
@@ -1220,9 +1263,6 @@ export function createKitchenScene({ user, roomCode }) {
 
       this.facing = chefFacing(dx, dy, this.facing);
 
-      this.playerSprite.x = Math.round(this.player.x);
-      this.playerSprite.y = Math.round(this.player.y + CHEF_FOOT_OFFSET);
-
       if (moving && this.facing === "side") {
         this.playerSprite.setFlipX(dx > 0);
       }
@@ -1291,13 +1331,19 @@ export function createKitchenScene({ user, roomCode }) {
 
       const nextX = this.player.x + dx * step;
 
-      if (!this.isBlocked(nextX, this.player.y)) {
+      if (
+        !this.isBlocked(nextX, this.player.y) &&
+        !this.blockedByOtherPlayer(nextX, this.player.y)
+      ) {
         this.player.x = nextX;
       }
 
       const nextY = this.player.y + dy * step;
 
-      if (!this.isBlocked(this.player.x, nextY)) {
+      if (
+        !this.isBlocked(this.player.x, nextY) &&
+        !this.blockedByOtherPlayer(this.player.x, nextY)
+      ) {
         this.player.y = nextY;
       }
 
