@@ -114,3 +114,7 @@
   height: 100%;
   background: #22c55e;
 }
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
