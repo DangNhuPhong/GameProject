@@ -30,6 +30,13 @@ const PLAYER_SPEED = 75;
 const PLAYER_BLOCK_W = 10;
 const PLAYER_BLOCK_H = 8;
 
+// Người chơi khác được vẽ "chậm" hơn thực tế ngần này ms để luôn có 2 mốc vị trí
+// để nội suy đều (lớn = mượt hơn nhưng trễ hơn; nên >= 2 lần POSITION_SEND_INTERVAL)
+const INTERP_DELAY_MS = 100;
+
+// Gửi vị trí lên server tối đa mỗi ngần này ms (50ms = 20 lần/giây)
+const POSITION_SEND_INTERVAL = 50;
+
 // ⚠ Phải khớp với server (Station.range, IngredientShelf.canTake, PLATE_RANGE)
 const INTERACT_RANGE = 34;
 
@@ -450,12 +457,12 @@ export function createKitchenScene({ user, roomCode }) {
         console.warn("Server:", message);
       });
 
-      on("player-position", ({ userId, x, y }) => {
+      on("player-position", ({ userId, x, y, t }) => {
         if (userId === user.id) {
           return;
         }
 
-        this.updateOtherPlayer(userId, x, y);
+        this.updateOtherPlayer(userId, x, y, t);
       });
 
       on("player-joined", ({ userId }) => {
@@ -529,16 +536,16 @@ export function createKitchenScene({ user, roomCode }) {
 
     blockedByOtherPlayer(x, y) {
       return Object.values(this.otherPlayers).some((other) => {
-        const newDx = Math.abs(x - other.lastX);
-        const newDy = Math.abs(y - other.lastY);
+        const newDx = Math.abs(x - other.curX);
+        const newDy = Math.abs(y - other.curY);
 
         if (newDx >= PLAYER_BLOCK_W || newDy >= PLAYER_BLOCK_H) {
           return false;
         }
 
         const nowDist = Math.hypot(
-          this.player.x - other.lastX,
-          this.player.y - other.lastY,
+          this.player.x - other.curX,
+          this.player.y - other.curY,
         );
 
         return Math.hypot(newDx, newDy) < nowDist;
@@ -561,11 +568,11 @@ export function createKitchenScene({ user, roomCode }) {
           ? this.add
               .ellipse(itemData.x, itemData.y, 14, 9, 0xffffff)
               .setStrokeStyle(1, 0x94a3b8)
-              .setDepth(3)
+              .setDepth(6)
           : this.add
               .circle(itemData.x, itemData.y, 4, 0xffffff)
               .setStrokeStyle(1, 0x4e2a0b)
-              .setDepth(3);
+              .setDepth(6);
 
         this.items[itemData.id] = {
           id: itemData.id,
@@ -828,7 +835,7 @@ export function createKitchenScene({ user, roomCode }) {
     // OTHER PLAYERS
     // =====================================
 
-    updateOtherPlayer(userId, x, y) {
+    updateOtherPlayer(userId, x, y, t) {
       if (!this.otherPlayers[userId]) {
         const shadow = this.add
           .ellipse(x, y + 8, 12, 4, 0x000000, 0.25)
@@ -839,20 +846,38 @@ export function createKitchenScene({ user, roomCode }) {
           .setOrigin(0.5, 1)
           .setDepth(5);
 
+        // samples = các mốc vị trí {t, x, y} theo giờ của người gửi
+        // clockOffset = chênh lệch đồng hồ (giờ nhận - giờ gửi), lấy mức nhỏ nhất
+        // cur = vị trí đang vẽ, prev = vị trí khung hình trước
         this.otherPlayers[userId] = {
           shadow,
           player,
           facing: "down",
-          lastMoveAt: 0,
-          lastX: x,
-          lastY: y,
+          samples: [],
+          clockOffset: null,
+          curX: x,
+          curY: y,
+          prevX: x,
+          prevY: y,
         };
       }
 
       const other = this.otherPlayers[userId];
 
-      const mdx = x - other.lastX;
-      const mdy = y - other.lastY;
+      // Ước lượng chênh lệch đồng hồ giữa 2 máy
+      const sentAt = typeof t === "number" ? t : Date.now();
+      const sample = Date.now() - sentAt;
+
+      other.clockOffset =
+        other.clockOffset === null
+          ? sample
+          : Math.min(sample, other.clockOffset + 1);
+
+      // Hướng nhìn theo hướng di chuyển giữa 2 mốc vị trí
+      const last = other.samples[other.samples.length - 1];
+
+      const mdx = last ? x - last.x : 0;
+      const mdy = last ? y - last.y : 0;
 
       if (mdx !== 0 || mdy !== 0) {
         other.facing = chefFacing(mdx, mdy, other.facing);
@@ -860,19 +885,13 @@ export function createKitchenScene({ user, roomCode }) {
         if (other.facing === "side") {
           other.player.setFlipX(mdx > 0);
         }
-
-        other.lastMoveAt = this.time.now;
-
-        other.player.anims.play(`chef-orange-walk-${other.facing}`, true);
       }
 
-      other.lastX = x;
-      other.lastY = y;
+      other.samples.push({ t: sentAt, x, y });
 
-      other.player.x = x;
-      other.player.y = y + CHEF_FOOT_OFFSET;
-      other.shadow.x = x;
-      other.shadow.y = y + 8;
+      if (other.samples.length > 40) {
+        other.samples.shift();
+      }
     }
 
     // =====================================
@@ -1257,7 +1276,7 @@ export function createKitchenScene({ user, roomCode }) {
     // NHÂN VẬT: vị trí + animation
     // =====================================
 
-    updateChefSprites(dx, dy) {
+    updateChefSprites(dx, dy, delta) {
       // Người chơi của mình
       const moving = dx !== 0 || dy !== 0;
 
@@ -1275,11 +1294,53 @@ export function createKitchenScene({ user, roomCode }) {
         true,
       );
 
-      // Người chơi khác: dừng quá 150ms thì về tư thế đứng
+      // Người chơi khác: nội suy giữa các mốc vị trí theo thời gian người gửi,
+      // vẽ chậm INTERP_DELAY_MS để luôn có mốc kế tiếp -> tốc độ đều, không giật
       Object.values(this.otherPlayers).forEach((other) => {
-        if (this.time.now - other.lastMoveAt > 150) {
-          other.player.anims.play(`chef-orange-idle-${other.facing}`, true);
+        const buf = other.samples;
+
+        if (buf.length > 0 && other.clockOffset !== null) {
+          const renderT = Date.now() - other.clockOffset - INTERP_DELAY_MS;
+
+          // Bỏ các mốc đã qua (luôn giữ ít nhất 2 mốc)
+          while (buf.length > 2 && buf[1].t <= renderT) {
+            buf.shift();
+          }
+
+          const a = buf[0];
+          const b = buf[1];
+
+          if (!b || renderT <= a.t) {
+            other.curX = a.x;
+            other.curY = a.y;
+          } else if (renderT >= b.t || b.t - a.t > 400) {
+            // Đã tới mốc cuối, hoặc 2 mốc cách nhau quá lâu (tab bị treo): đặt thẳng
+            other.curX = b.x;
+            other.curY = b.y;
+          } else {
+            const k = (renderT - a.t) / (b.t - a.t);
+
+            other.curX = a.x + (b.x - a.x) * k;
+            other.curY = a.y + (b.y - a.y) * k;
+          }
         }
+
+        // Có dịch chuyển trong khung hình này -> đang đi bộ
+        const moving =
+          Math.hypot(other.curX - other.prevX, other.curY - other.prevY) > 0.02;
+
+        other.prevX = other.curX;
+        other.prevY = other.curY;
+
+        other.player.x = Math.round(other.curX);
+        other.player.y = Math.round(other.curY + CHEF_FOOT_OFFSET);
+        other.shadow.x = Math.round(other.curX);
+        other.shadow.y = Math.round(other.curY + 8);
+
+        other.player.anims.play(
+          `chef-orange-${moving ? "walk" : "idle"}-${other.facing}`,
+          true,
+        );
       });
     }
 
@@ -1299,14 +1360,26 @@ export function createKitchenScene({ user, roomCode }) {
         return;
       }
 
+      // Giới hạn ~20 lần/giây. Khi dừng lại, vị trí cuối vẫn được gửi
+      // ở lần kiểm tra kế tiếp vì nó vẫn khác lần gửi trước.
+      const nowMs = performance.now();
+
+      if (nowMs - (this.lastSentAt || 0) < POSITION_SEND_INTERVAL) {
+        return;
+      }
+
+      this.lastSentAt = nowMs;
+
       this.lastSentX = x;
       this.lastSentY = y;
 
-      socket.emit("player-position", {
+      // volatile: nếu mạng nghẽn thì bỏ gói cũ thay vì xếp hàng rồi dồn cục
+      socket.volatile.emit("player-position", {
         roomCode,
         userId: user.id,
         x,
         y,
+        t: Date.now(),
       });
     }
 
@@ -1350,7 +1423,7 @@ export function createKitchenScene({ user, roomCode }) {
       this.playerShadow.x = this.player.x;
       this.playerShadow.y = this.player.y + 8;
 
-      this.updateChefSprites(dx, dy);
+      this.updateChefSprites(dx, dy, delta);
 
       this.sendPosition();
 
