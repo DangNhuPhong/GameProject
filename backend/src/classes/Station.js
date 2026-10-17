@@ -8,7 +8,7 @@
 // =====================================
 
 class Station {
-  constructor({ id, type, x = 0, y = 0, range = 90 }) {
+  constructor({ id, type, x = 0, y = 0, range = 30 }) {
     this.id = id;
     this.type = type;
 

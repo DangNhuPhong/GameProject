@@ -23,8 +23,32 @@ const FEET_HALF_W = 5;
 const FEET_TOP = 1;
 const FEET_BOTTOM = 7;
 
+// gid của các ô "tủ gỗ" (mặt trước quầy) trong layer counters
+const CABINET_GIDS = new Set([12, 13, 15]);
+
+// Chỉ chặn phần trên của ô tủ (tính từ mép trên ô, đơn vị px).
+// 8 = nửa trên (ô cao 16px). Phần dưới còn lại đi xuyên qua được.
+const CABINET_BLOCK_H = 8;
+
 // Tốc độ (pixel / giây)
 const PLAYER_SPEED = 75;
+
+// near: số càng nhỏ = zoom càng sát.
+// far : để null, tính trong computeZoom() để thấy TRỌN map.
+const CAMERA_VIEW_W = { near: 190, far: null };
+
+const ZOOM_STORAGE_KEY = "kitchen-zoom-mode";
+
+function loadZoomMode() {
+  try {
+    return localStorage.getItem(ZOOM_STORAGE_KEY) === "near" ? "near" : "far";
+  } catch {
+    return "far";
+  }
+}
+
+// Độ "mượt" khi camera đuổi theo nhân vật (0.05 chậm → 1 dính cứng)
+const CAMERA_LERP = 0.15;
 
 // Hộp va chạm giữa 2 người chơi (2 người phải cách nhau ít nhất từng này pixel)
 const PLAYER_BLOCK_W = 10;
@@ -38,7 +62,7 @@ const INTERP_DELAY_MS = 100;
 const POSITION_SEND_INTERVAL = 50;
 
 // ⚠ Phải khớp với server (Station.range, IngredientShelf.canTake, PLATE_RANGE)
-const INTERACT_RANGE = 34;
+const INTERACT_RANGE = 20;
 
 // ⚠ Phải nhỏ hơn hoặc bằng PICKUP_RANGE của server
 const PICKUP_RANGE = 24;
@@ -260,6 +284,7 @@ export function createKitchenScene({ user, roomCode }) {
       this.otherPlayers = {};
 
       this.facing = "down";
+      this.zoomMode = "far";
 
       this.lastSentX = null;
       this.lastSentY = null;
@@ -307,6 +332,7 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     create() {
+      this.zoomMode = loadZoomMode();
       // =================================
       // TILEMAP
       // =================================
@@ -352,6 +378,8 @@ export function createKitchenScene({ user, roomCode }) {
         .setOrigin(0.5, 1)
         .setDepth(5);
 
+      this.setupCamera();
+
       // =================================
       // KEYBOARD
       // =================================
@@ -377,6 +405,18 @@ export function createKitchenScene({ user, roomCode }) {
       this.dropKey = this.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.Q,
       );
+
+      this.input.keyboard.on("keydown-Z", (event) => {
+        if (event && event.repeat) {
+          return;
+        }
+
+        this.setZoomMode(this.zoomMode === "near" ? "far" : "near");
+      });
+
+      this.input.on("wheel", (pointer, over, dx, dy) => {
+        this.setZoomMode(dy < 0 ? "near" : "far");
+      });
 
       // =================================
       // SOCKET
@@ -517,13 +557,25 @@ export function createKitchenScene({ user, roomCode }) {
         [x + FEET_HALF_W, y + FEET_BOTTOM],
       ];
 
-      return points.some(
-        ([px, py]) =>
-          px < 0 ||
-          px > WORLD_W ||
-          py > WORLD_H ||
-          this.counters.hasTileAtWorldXY(px, py),
-      );
+      return points.some(([px, py]) => {
+        if (px < 0 || px > WORLD_W || py > WORLD_H) {
+          return true;
+        }
+
+        const tile = this.counters.getTileAtWorldXY(px, py);
+
+        if (!tile) {
+          return false;
+        }
+
+        // Tủ gỗ: chỉ chặn nửa trên (phía gần mặt bàn)
+        if (CABINET_GIDS.has(tile.index)) {
+          return py - tile.pixelY < CABINET_BLOCK_H;
+        }
+
+        // Mặt bàn, lò...: chặn cả ô
+        return true;
+      });
     }
 
     // =====================================
@@ -661,6 +713,63 @@ export function createKitchenScene({ user, roomCode }) {
       };
     }
 
+    // Zoom nguyên: đủ sát, nhưng không bao giờ để vùng nhìn lớn hơn map
+    computeZoom() {
+      const gw = this.scale.width;
+      const gh = this.scale.height;
+
+      // Zoom vừa khít để thấy trọn map ("contain")
+      const fitZoom = Math.min(gw / WORLD_W, gh / WORLD_H);
+
+      if (this.zoomMode === "far") {
+        return fitZoom;
+      }
+
+      // near: sát nhân vật, nhưng không bao giờ xa hơn mức far
+      return Math.max(fitZoom, gw / CAMERA_VIEW_W.near);
+    }
+
+    setZoomMode(mode) {
+      if (mode === this.zoomMode) {
+        return;
+      }
+
+      this.zoomMode = mode;
+
+      try {
+        localStorage.setItem(ZOOM_STORAGE_KEY, mode);
+      } catch {
+        // trình duyệt chặn localStorage thì bỏ qua, chỉ không nhớ được lựa chọn
+      }
+
+      this.cameras.main.setZoom(this.computeZoom());
+      this.updateZoomLabel();
+    }
+
+    updateZoomLabel() {
+      if (this.hudZoom) {
+        this.hudZoom.textContent = `Z · Zoom: ${this.zoomMode === "near" ? "Close" : "Wide"}`;
+      }
+    }
+
+    setupCamera() {
+      const cam = this.cameras.main;
+      cam.setBackgroundColor("#12302e");
+      cam.setBounds(0, 0, WORLD_W, WORLD_H);
+      cam.setZoom(this.computeZoom());
+      cam.startFollow(this.player, true, CAMERA_LERP, CAMERA_LERP);
+
+      // Đổi kích thước cửa sổ → tính lại zoom
+      const onResize = () => cam.setZoom(this.computeZoom());
+      this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
+      });
+
+      // Đặt HUD SAU khi camera vẽ xong để không bị lệch một nhịp so với nhân vật
+      cam.on(Phaser.Cameras.Scene2D.Events.POST_RENDER, () => this.layoutHud());
+    }
     // =====================================
     // HUD  (score / gợi ý phím / chữ trạng thái trạm)
     //
@@ -702,6 +811,12 @@ export function createKitchenScene({ user, roomCode }) {
         "display:none;background:rgba(18,48,46,.95);border-radius:.6em;padding:.35em .6em;transform:translate(-50%,-100%);",
       );
 
+      // Nhãn zoom (góc dưới bên phải)
+      this.hudZoom = make(
+        "background:rgba(18,48,46,.85);border-radius:.4em;padding:.2em .6em;font-size:.8em;transform:translate(-100%,-100%);",
+      );
+      this.updateZoomLabel();
+
       // Chữ trạng thái của trạm (Chopping..., Take it out!...)
       this.stationLabels = {};
 
@@ -741,30 +856,39 @@ export function createKitchenScene({ user, roomCode }) {
         return;
       }
 
+      const cam = this.cameras.main;
       const rect = this.game.canvas.getBoundingClientRect();
-      const k = rect.width / WORLD_W;
 
-      this.hudRoot.style.fontSize = `${Math.max(11, Math.round(k * 3))}px`;
+      // số pixel màn hình cho mỗi pixel của map
+      const k = cam.zoom * (rect.width / this.scale.width);
+      const view = cam.worldView;
 
-      const sx = (x) => rect.left + x * k;
-      const sy = (y) => rect.top + y * k;
+      const sx = (x) => rect.left + (x - view.x) * k;
+      const sy = (y) => rect.top + (y - view.y) * k;
 
-      // Score: giữa phía trên map
-      this.hudScore.style.left = `${sx(WORLD_W / 2)}px`;
-      this.hudScore.style.top = `${sy(7)}px`;
+      // Cỡ chữ theo chiều cao cửa sổ, không phụ thuộc zoom
+      const fs = Phaser.Math.Clamp(Math.round(rect.height / 50), 12, 20);
+      this.hudRoot.style.fontSize = `${fs}px`;
 
-      // Hint: ngay trên đầu người chơi, không tràn ra ngoài canvas
+      // Score: cố định giữa phía trên màn hình
+      this.hudScore.style.left = `${rect.left + rect.width / 2}px`;
+      this.hudScore.style.top = `${rect.top + fs * 1.6}px`;
+
+      this.hudZoom.style.left = `${rect.right - fs}px`;
+      this.hudZoom.style.top = `${rect.bottom - fs}px`;
+
+      // Hint: ngay trên đầu người chơi
       if (this.hudHintVisible) {
         const w = this.hudHint.offsetWidth;
 
         const x = Phaser.Math.Clamp(
           sx(this.player.x),
-          rect.left + w / 2 + 2,
-          rect.right - w / 2 - 2,
+          rect.left + w / 2 + 4,
+          rect.right - w / 2 - 4,
         );
 
         this.hudHint.style.left = `${x}px`;
-        this.hudHint.style.top = `${Math.max(sy(this.player.y - 12), rect.top + 24)}px`;
+        this.hudHint.style.top = `${Math.max(sy(this.player.y - 13), rect.top + fs * 3)}px`;
       }
 
       // Chữ trạng thái trạm: phía trên thanh tiến độ
@@ -1277,7 +1401,10 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     updateChefSprites(dx, dy, delta) {
-      // Người chơi của mình
+      if (!this.playerSprite) {
+        return;
+      }
+
       const moving = dx !== 0 || dy !== 0;
 
       this.facing = chefFacing(dx, dy, this.facing);
@@ -1286,8 +1413,8 @@ export function createKitchenScene({ user, roomCode }) {
         this.playerSprite.setFlipX(dx > 0);
       }
 
-      this.playerSprite.x = this.player.x;
-      this.playerSprite.y = this.player.y + CHEF_FOOT_OFFSET;
+      this.playerSprite.x = Math.round(this.player.x);
+      this.playerSprite.y = Math.round(this.player.y + CHEF_FOOT_OFFSET);
 
       this.playerSprite.anims.play(
         `chef-blue-${moving ? "walk" : "idle"}-${this.facing}`,
@@ -1479,8 +1606,6 @@ export function createKitchenScene({ user, roomCode }) {
 
       this.updateStationViews();
       this.setHint(hint);
-
-      this.layoutHud();
     }
   };
 }

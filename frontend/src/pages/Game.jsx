@@ -6,16 +6,10 @@ import Phaser from "phaser";
 import { supabase } from "../lib/supabase";
 
 import { getMatch, getRecipes } from "../services/api";
-import { createKitchenScene, WORLD_H, WORLD_W } from "./KitchenScene";
+import { createKitchenScene } from "./KitchenScene";
 import { socket } from "../services/socket";
 
 import "./Game.css";
-
-// =====================================
-
-// WORLD
-
-// =====================================
 
 function Game() {
   const { roomCode } = useParams();
@@ -105,20 +99,25 @@ function Game() {
 
     const KitchenScene = createKitchenScene({ user, roomCode });
 
-    // Phóng nguyên số lần (1x, 2x, 3x...) để mọi pixel to bằng nhau và nét.
-    const zoom = Math.max(
-      1,
-      Math.floor(
-        Math.min(window.innerWidth / WORLD_W, window.innerHeight / WORLD_H),
-      ),
-    );
+    // Canvas có kích thước đúng bằng số PIXEL VẬT LÝ của cửa sổ
+    // (CSS px x devicePixelRatio), rồi thu lại bằng zoom = 1 / dpr.
+    // => 1 pixel canvas = 1 pixel màn hình thật, trình duyệt không phải
+    //    kéo giãn nên không bị mờ, kể cả khi Windows đặt tỉ lệ 125% / 150%.
+    // Việc phóng to pixel-art do camera trong KitchenScene lo (zoom số nguyên).
+    const getSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+
+      return {
+        dpr,
+        w: Math.max(1, Math.floor(window.innerWidth * dpr)),
+        h: Math.max(1, Math.floor(window.innerHeight * dpr)),
+      };
+    };
+
+    const { dpr, w, h } = getSize();
 
     const config = {
-      type: Phaser.AUTO,
-
-      width: WORLD_W,
-
-      height: WORLD_H,
+      type: Phaser.CANVAS,
 
       parent: gameRef.current,
 
@@ -134,15 +133,30 @@ function Game() {
       scale: {
         mode: Phaser.Scale.NONE,
 
-        zoom,
+        width: w,
 
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        height: h,
+
+        zoom: 1 / dpr,
       },
 
       scene: KitchenScene,
     };
 
     game = new Phaser.Game(config);
+    window.__game = game;
+    // Đổi kích thước cửa sổ / F11 / Ctrl +- → canvas cập nhật theo
+    const onResize = () => {
+      if (!game) return;
+
+      const size = getSize();
+
+      game.scale.setZoom(1 / size.dpr);
+
+      game.scale.resize(size.w, size.h);
+    };
+
+    window.addEventListener("resize", onResize);
 
     // =====================================
 
@@ -151,6 +165,8 @@ function Game() {
     // =====================================
 
     return () => {
+      window.removeEventListener("resize", onResize);
+
       socket.off("game-state");
 
       socket.off("item-created");
