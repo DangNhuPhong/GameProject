@@ -7,7 +7,7 @@ class IngredientShelf {
     this.y = y;
   }
 
-  canTake(playerX, playerY, range = 90) {
+  canTake(playerX, playerY, range = 190) {
     const dx = playerX - this.x;
     const dy = playerY - this.y;
 
