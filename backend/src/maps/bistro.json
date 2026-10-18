@@ -1,28 +1,9 @@
 {
   "compressionlevel": -1,
-  "width": 86,
   "height": 48,
   "infinite": false,
-  "orientation": "orthogonal",
-  "renderorder": "right-down",
-  "tilewidth": 4,
-  "tileheight": 4,
-  "tiledversion": "1.10.2",
-  "type": "map",
-  "version": "1.10",
-  "nextlayerid": 3,
-  "nextobjectid": 12,
   "layers": [
     {
-      "id": 1,
-      "name": "counters",
-      "type": "tilelayer",
-      "x": 0,
-      "y": 0,
-      "width": 86,
-      "height": 48,
-      "opacity": 1,
-      "visible": true,
       "data": [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -197,206 +178,468 @@
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
       ],
+      "height": 48,
+      "id": 1,
+      "name": "counters",
+      "opacity": 1,
       "properties": [
-        { "name": "collides", "type": "bool", "value": true },
-        { "name": "hidden", "type": "bool", "value": true }
-      ]
+        {
+          "name": "collides",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "hidden",
+          "type": "bool",
+          "value": true
+        }
+      ],
+      "type": "tilelayer",
+      "visible": true,
+      "width": 86,
+      "x": 0,
+      "y": 0
     },
     {
+      "draworder": "topdown",
       "id": 2,
       "name": "objects",
-      "type": "objectgroup",
-      "x": 0,
-      "y": 0,
-      "opacity": 1,
-      "visible": true,
-      "draworder": "topdown",
       "objects": [
         {
+          "height": 16,
           "id": 1,
           "name": "Dough Shelf",
-          "type": "shelf",
-          "x": -3,
-          "y": 38,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "dough-shelf" },
-            { "name": "centerX", "type": "int", "value": 5 },
-            { "name": "centerY", "type": "int", "value": 46 },
-            { "name": "ingredient", "type": "string", "value": "dough" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 46
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "dough-shelf"
+            },
+            {
+              "name": "ingredient",
+              "type": "string",
+              "value": "dough"
+            }
+          ],
+          "rotation": 0,
+          "type": "shelf",
+          "visible": true,
+          "width": 16,
+          "x": -3,
+          "y": 38
         },
         {
+          "height": 16,
           "id": 2,
           "name": "Salad Shelf",
-          "type": "shelf",
-          "x": 27,
-          "y": 38,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "salad-shelf" },
-            { "name": "centerX", "type": "int", "value": 35 },
-            { "name": "centerY", "type": "int", "value": 46 },
-            { "name": "ingredient", "type": "string", "value": "salad" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 35
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 46
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "salad-shelf"
+            },
+            {
+              "name": "ingredient",
+              "type": "string",
+              "value": "salad"
+            }
+          ],
+          "rotation": 0,
+          "type": "shelf",
+          "visible": true,
+          "width": 16,
+          "x": 27,
+          "y": 38
         },
         {
+          "height": 16,
           "id": 3,
           "name": "Tomato Shelf",
-          "type": "shelf",
-          "x": 59,
-          "y": 38,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "tomato-shelf" },
-            { "name": "centerX", "type": "int", "value": 67 },
-            { "name": "centerY", "type": "int", "value": 46 },
-            { "name": "ingredient", "type": "string", "value": "tomato" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 67
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 46
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "tomato-shelf"
+            },
+            {
+              "name": "ingredient",
+              "type": "string",
+              "value": "tomato"
+            }
+          ],
+          "rotation": 0,
+          "type": "shelf",
+          "visible": true,
+          "width": 16,
+          "x": 59,
+          "y": 38
         },
         {
+          "height": 16,
           "id": 4,
           "name": "Meat Shelf",
-          "type": "shelf",
-          "x": 100,
-          "y": -3,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "meat-shelf" },
-            { "name": "centerX", "type": "int", "value": 108 },
-            { "name": "centerY", "type": "int", "value": 5 },
-            { "name": "ingredient", "type": "string", "value": "meat" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 108
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "meat-shelf"
+            },
+            {
+              "name": "ingredient",
+              "type": "string",
+              "value": "meat"
+            }
+          ],
+          "rotation": 0,
+          "type": "shelf",
+          "visible": true,
+          "width": 16,
+          "x": 100,
+          "y": -3
         },
         {
+          "height": 16,
           "id": 5,
           "name": "Grill",
-          "type": "station",
-          "x": 124,
-          "y": -3,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "grill" },
-            { "name": "centerX", "type": "int", "value": 132 },
-            { "name": "centerY", "type": "int", "value": 5 },
-            { "name": "kind", "type": "string", "value": "grill" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 132
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "grill"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "grill"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 124,
+          "y": -3
         },
         {
+          "height": 16,
           "id": 6,
           "name": "Oven",
-          "type": "station",
-          "x": 139,
-          "y": -3,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "oven" },
-            { "name": "centerX", "type": "int", "value": 147 },
-            { "name": "centerY", "type": "int", "value": 5 },
-            { "name": "kind", "type": "string", "value": "oven" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 147
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "oven"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "oven"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 139,
+          "y": -3
         },
         {
+          "height": 16,
           "id": 7,
           "name": "Bread Shelf",
-          "type": "shelf",
-          "x": 165,
-          "y": 3,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "bread-shelf" },
-            { "name": "centerX", "type": "int", "value": 173 },
-            { "name": "centerY", "type": "int", "value": 5 },
-            { "name": "ingredient", "type": "string", "value": "bread" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 173
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "bread-shelf"
+            },
+            {
+              "name": "ingredient",
+              "type": "string",
+              "value": "bread"
+            }
+          ],
+          "rotation": 0,
+          "type": "shelf",
+          "visible": true,
+          "width": 16,
+          "x": 165,
+          "y": 3
         },
         {
+          "height": 16,
           "id": 8,
           "name": "Cutting Board",
-          "type": "station",
-          "x": 139,
-          "y": 35,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "cutting-board" },
-            { "name": "centerX", "type": "int", "value": 147 },
-            { "name": "centerY", "type": "int", "value": 43 },
-            { "name": "kind", "type": "string", "value": "cutting-board" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 147
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 43
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "cutting-board"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "cutting-board"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 139,
+          "y": 35
         },
         {
+          "height": 16,
           "id": 9,
           "name": "Plate Station",
-          "type": "station",
-          "x": 187,
-          "y": 32,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "plate-station" },
-            { "name": "centerX", "type": "int", "value": 195 },
-            { "name": "centerY", "type": "int", "value": 40 },
-            { "name": "kind", "type": "string", "value": "plate-station" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 195
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 40
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "plate-station"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "plate-station"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 187,
+          "y": 32
         },
         {
+          "height": 16,
           "id": 10,
           "name": "Serving Counter",
-          "type": "station",
-          "x": 204,
-          "y": 143,
-          "width": 16,
-          "height": 16,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
-            { "name": "id", "type": "string", "value": "serving-counter" },
-            { "name": "centerX", "type": "int", "value": 212 },
-            { "name": "centerY", "type": "int", "value": 151 },
-            { "name": "kind", "type": "string", "value": "serving-counter" }
-          ]
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 212
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 151
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "serving-counter"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "serving-counter"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 204,
+          "y": 143
         },
         {
+          "height": 0,
           "id": 11,
           "name": "Player Spawn",
-          "type": "spawn",
-          "x": 172,
-          "y": 72,
-          "width": 0,
-          "height": 0,
+          "opacity": 1,
+          "point": true,
           "rotation": 0,
+          "type": "spawn",
           "visible": true,
-          "point": true
+          "width": 0,
+          "x": 172,
+          "y": 72
+        },
+        {
+          "height": 16,
+          "id": 1001,
+          "name": "Trash Bin",
+          "opacity": 1,
+          "properties": [
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 8
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 8
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "trash-bin"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "trash-bin"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 220,
+          "y": 40
+        },
+        {
+          "height": 16,
+          "id": 1002,
+          "name": "Order Station",
+          "opacity": 1,
+          "properties": [
+            {
+              "name": "centerX",
+              "type": "int",
+              "value": 8
+            },
+            {
+              "name": "centerY",
+              "type": "int",
+              "value": 8
+            },
+            {
+              "name": "id",
+              "type": "string",
+              "value": "order-station"
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "order-station"
+            }
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 16,
+          "x": 150,
+          "y": 150
         }
-      ]
+      ],
+      "opacity": 1,
+      "type": "objectgroup",
+      "visible": true,
+      "x": 0,
+      "y": 0
     }
   ],
+  "nextlayerid": 3,
+  "nextobjectid": 12,
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "tiledversion": "1.12.2",
+  "tileheight": 4,
   "tilesets": [
     {
       "columns": 1,
@@ -405,11 +648,15 @@
       "imageheight": 4,
       "imagewidth": 4,
       "margin": 0,
-      "spacing": 0,
       "name": "collision-tiles",
+      "spacing": 0,
       "tilecount": 1,
-      "tilewidth": 4,
-      "tileheight": 4
+      "tileheight": 4,
+      "tilewidth": 4
     }
-  ]
+  ],
+  "tilewidth": 4,
+  "type": "map",
+  "version": "1.10",
+  "width": 86
 }
