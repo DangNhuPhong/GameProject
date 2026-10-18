@@ -33,11 +33,14 @@ const io = new Server(server, {
 
 const gameRooms = {};
 
-function getGameRoom(roomCode) {
+// mapId chỉ có tác dụng ở lần tạo phòng đầu tiên (lúc có người join-room)
+function getGameRoom(roomCode, mapId) {
   if (!gameRooms[roomCode]) {
-    console.log(`Creating new GameRoom: ${roomCode}`);
+    console.log(
+      `Creating new GameRoom: ${roomCode} (map: ${mapId || "default"})`,
+    );
 
-    gameRooms[roomCode] = new GameRoom(roomCode);
+    gameRooms[roomCode] = new GameRoom(roomCode, mapId || undefined);
   }
 
   return gameRooms[roomCode];
@@ -83,7 +86,7 @@ io.on("connection", (socket) => {
   // JOIN ROOM
   // ==========================================
 
-  handle("join-room", ({ roomCode, userId }) => {
+  handle("join-room", ({ roomCode, userId, mapId }) => {
     if (!roomCode || !userId) {
       return;
     }
@@ -96,11 +99,17 @@ io.on("connection", (socket) => {
 
     socket.data.userId = userId;
 
-    const gameRoom = getGameRoom(normalizedRoomCode);
+    const gameRoom = getGameRoom(normalizedRoomCode, mapId);
 
     console.log(`User ${userId} joined room ${normalizedRoomCode}`);
 
     socket.emit("game-state", gameRoom.getState());
+
+    // Danh sách đơn + điểm hiện tại cho người mới vào
+    socket.emit("orders-updated", {
+      orders: gameRoom.getOrders(),
+      score: gameRoom.score,
+    });
 
     socket.emit("room-joined", {
       roomCode: normalizedRoomCode,
@@ -491,14 +500,10 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (gameRoom.orders.length === 0) {
-      gameRoom.createOrder();
-      gameRoom.createOrder();
-      gameRoom.nextOrderAt = Date.now() + 12000;
-    }
-
-    io.to(code).emit("orders-updated", {
+    // Chỉ gửi cho người đang bấm E để mở bảng đơn hàng
+    socket.emit("orders-list", {
       orders: gameRoom.getOrders(),
+      score: gameRoom.score,
     });
   });
 
@@ -547,6 +552,8 @@ io.on("connection", (socket) => {
       order: result.order,
       recipeId: result.recipeId,
       userId,
+      points: result.points,
+      score: result.score,
     });
 
     io.to(code).emit("orders-updated", {
@@ -554,14 +561,18 @@ io.on("connection", (socket) => {
     });
   });
 
-  function nearSpecialStation(gameRoom, stationId, x, y, range = 28) {
-    const station = gameRoom.specialStations.find((s) => s.id === stationId);
-
-    if (!station || typeof x !== "number" || typeof y !== "number") {
+  // Tìm trạm đặc biệt theo "kind" (trash-bin, order-station, serving-counter)
+  // hoặc theo id. Có nhiều trạm cùng loại thì xét cái gần nhất.
+  function nearSpecialStation(gameRoom, kindOrId, x, y, range = 28) {
+    if (typeof x !== "number" || typeof y !== "number") {
       return false;
     }
 
-    return Math.hypot(x - station.x, y - station.y) <= range;
+    return gameRoom.specialStations.some(
+      (s) =>
+        (s.kind === kindOrId || s.id === kindOrId) &&
+        Math.hypot(x - s.x, y - s.y) <= range,
+    );
   }
 
   // ==========================================
@@ -869,6 +880,20 @@ setInterval(() => {
         io.to(gameRoom.roomCode).emit("station-updated", {
           station: station.getState(),
           item: station.item ? station.item.serialize() : null,
+        });
+      }
+
+      // Đơn hàng: sinh đơn ngẫu nhiên theo thời gian, bỏ đơn hết hạn
+      const before = gameRoom.orders.map((o) => o.id).join(",");
+
+      gameRoom.updateOrders();
+
+      const after = gameRoom.orders.map((o) => o.id).join(",");
+
+      if (before !== after) {
+        io.to(gameRoom.roomCode).emit("orders-updated", {
+          orders: gameRoom.getOrders(),
+          score: gameRoom.score,
         });
       }
     }

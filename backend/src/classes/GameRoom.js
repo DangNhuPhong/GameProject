@@ -46,6 +46,8 @@ class GameRoom {
     this.nextOrderId = 1;
     this.nextOrderAt = Date.now() + 12000;
 
+    this.score = 0;
+
     // Layout lấy từ file map
     const layout = getMapLayout(mapId);
 
@@ -63,6 +65,10 @@ class GameRoom {
       }));
 
     this.spawn = layout.spawn;
+
+    // Bắt đầu với 2 đơn ngẫu nhiên, sau đó cứ 12 giây thêm 1 đơn (tối đa 3)
+    this.createOrder();
+    this.createOrder();
 
     // Kệ nguyên liệu
     this.shelves = layout.shelves.map(
@@ -151,7 +157,15 @@ class GameRoom {
       };
     }
 
-    const ingredients = plate.ingredients;
+    // Chuẩn hoá: nguyên liệu trên đĩa có thể là object { type, status } hoặc chuỗi
+    const ingredients = plate.ingredients.map((i) =>
+      typeof i === "string"
+        ? { type: i, status: "raw" }
+        : {
+            type: i.type ?? i.ingredientType,
+            status: i.status ?? "raw",
+          },
+    );
 
     const exactRecipe = (expected) =>
       ingredients.length === expected.length &&
@@ -180,6 +194,8 @@ class GameRoom {
     const recipe = recipes.find((r) => r.valid());
 
     if (!recipe) {
+      console.log("[serve] plate ingredients:", JSON.stringify(ingredients));
+
       return {
         success: false,
         message: "Recipe is incomplete or incorrect",
@@ -202,14 +218,23 @@ class GameRoom {
       };
     }
 
+    // orderIndex là đơn ĐẦU TIÊN (sớm nhất) khớp món, vì this.orders xếp theo thời gian tạo
     const [completed] = this.orders.splice(orderIndex, 1);
 
     this.removeItem(plate.id);
+
+    // Điểm = 50 + số giây còn lại của đơn
+    const remainingMs = Math.max(0, completed.expiresAt - Date.now());
+    const points = 50 + Math.round(remainingMs / 1000);
+
+    this.score += points;
 
     return {
       success: true,
       recipeId: recipe.id,
       order: completed,
+      points,
+      score: this.score,
     };
   }
 
@@ -407,6 +432,9 @@ class GameRoom {
       stations: this.stations.map((station) => station.getState()),
 
       plateStation: this.plateStation,
+
+      orders: this.getOrders(),
+      score: this.score,
     };
   }
 }
