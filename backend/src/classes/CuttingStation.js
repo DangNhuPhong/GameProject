@@ -20,7 +20,7 @@ class CuttingStation extends Station {
     y = 0,
     cutTime = 2000,
     acceptedTypes = ["tomato"],
-    range = 34, // khớp INTERACT_RANGE của client
+    range = 50, // khớp INTERACT_RANGE của client
   }) {
     super({
       id,
