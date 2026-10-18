@@ -212,7 +212,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const canTake = shelf.canTake(playerX, playerY, 90);
+      const canTake = shelf.canTake(playerX, playerY, 1000);
 
       if (!canTake) {
         console.log(`${userId} is too far from ${shelfId}`);
