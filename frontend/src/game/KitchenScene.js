@@ -1,41 +1,20 @@
 import Phaser from "phaser";
 import { socket } from "../services/socket";
+import { getMapConfig } from "./maps";
+import { readLayout, getProp } from "./mapLoader";
+import { STATION_BEHAVIORS } from "./stationBehaviors";
 
-// File trong src/assets: import để Vite tự xử lý đường dẫn.
-// (Nếu KitchenScene.js nằm sâu hơn, chỉnh lại "../assets/" cho đúng.)
-import kitchenMapUrl from "../assets/kitchen.json?url";
-import kitchenTilesUrl from "../assets/kitchen-tiles.png";
+import itemsUrl from "../assets/items.png";
+
 import chefBlueUrl from "../assets/chef-blue.png";
 import chefOrangeUrl from "../assets/chef-orange.png";
 
-// =====================================
-// KÍCH THƯỚC THẾ GIỚI (khớp với kitchen.json: 16 x 11 tile, mỗi tile 16px)
-// =====================================
-
-export const WORLD_W = 256;
-export const WORLD_H = 176;
-
-const FONT = "monospace";
-const TEXT_RES = 1;
-
-// Hitbox chân người chơi (nửa rộng, lệch dưới tâm)
+// Hitbox chân người chơi
 const FEET_HALF_W = 5;
-const FEET_TOP = 1;
-const FEET_BOTTOM = 7;
+const FEET_TOP = 3;
+const FEET_BOTTOM = 9; // = CHEF_FOOT_OFFSET
 
-// gid của các ô "tủ gỗ" (mặt trước quầy) trong layer counters
-const CABINET_GIDS = new Set([12, 13, 15]);
-
-// Chỉ chặn phần trên của ô tủ (tính từ mép trên ô, đơn vị px).
-// 8 = nửa trên (ô cao 16px). Phần dưới còn lại đi xuyên qua được.
-const CABINET_BLOCK_H = 8;
-
-// Tốc độ (pixel / giây)
 const PLAYER_SPEED = 75;
-
-// near: số càng nhỏ = zoom càng sát.
-// far : để null, tính trong computeZoom() để thấy TRỌN map.
-const CAMERA_VIEW_W = { near: 190, far: null };
 
 const ZOOM_STORAGE_KEY = "kitchen-zoom-mode";
 
@@ -47,173 +26,48 @@ function loadZoomMode() {
   }
 }
 
-// Độ "mượt" khi camera đuổi theo nhân vật (0.05 chậm → 1 dính cứng)
 const CAMERA_LERP = 0.15;
 
-// Hộp va chạm giữa 2 người chơi (2 người phải cách nhau ít nhất từng này pixel)
 const PLAYER_BLOCK_W = 10;
 const PLAYER_BLOCK_H = 8;
 
-// Người chơi khác được vẽ "chậm" hơn thực tế ngần này ms để luôn có 2 mốc vị trí
-// để nội suy đều (lớn = mượt hơn nhưng trễ hơn; nên >= 2 lần POSITION_SEND_INTERVAL)
 const INTERP_DELAY_MS = 100;
-
-// Gửi vị trí lên server tối đa mỗi ngần này ms (50ms = 20 lần/giây)
 const POSITION_SEND_INTERVAL = 50;
 
-// ⚠ Phải khớp với server (Station.range, IngredientShelf.canTake, PLATE_RANGE)
+// ⚠ Phải khớp với server
 const INTERACT_RANGE = 20;
-
-// ⚠ Phải nhỏ hơn hoặc bằng PICKUP_RANGE của server
 const PICKUP_RANGE = 24;
 
-// =====================================
-// LAYOUT  (lấy từ layer "objects" của kitchen.json: centerX / centerY)
-// ⚠ GameRoom.js phía server phải dùng đúng các toạ độ này
-// =====================================
-
-const SHELVES = [
-  { id: "meat-shelf", type: "meat", name: "Meat", x: 32, y: 24 },
-  { id: "tomato-shelf", type: "tomato", name: "Tomato", x: 128, y: 24 },
-  { id: "salad-shelf", type: "salad", name: "Salad", x: 224, y: 24 },
-  { id: "bread-shelf", type: "bread", name: "Bread", x: 80, y: 88 },
-  { id: "dough-shelf", type: "dough", name: "Dough", x: 128, y: 88 },
-];
-
-const PLATE_STATION = { id: "plate-station", x: 176, y: 88 };
-const GRILL = { id: "grill", x: 80, y: 24 };
-const CUTTING_BOARD = { id: "cutting-board", x: 176, y: 24 };
-
-// (Chưa có logic server) Lò nướng và khu phục vụ
-// const OVEN = { id: "oven", x: 48, y: 152 };
-// const SERVING = { id: "serving-counter", x: 160, y: 152 };
-
-const SPAWN = { x: 128, y: 120 };
-
-// =====================================
-// CẦU NỐI TOẠ ĐỘ CŨ (TẠM THỜI)
-//
-// Server đã chuyển sang toạ độ mới (GameRoom.js) nên cờ này = false.
-// Nếu server quay lại toạ độ cũ thì đổi thành true.
-// =====================================
-
-const SERVER_USES_OLD_COORDS = false;
-
-const SERVER_POS = {
-  "meat-shelf": { x: 110, y: 150 },
-  "tomato-shelf": { x: 470, y: 150 },
-  "salad-shelf": { x: 830, y: 150 },
-  "bread-shelf": { x: 300, y: 400 },
-  "dough-shelf": { x: 470, y: 400 },
-  "plate-station": { x: 800, y: 400 },
-  grill: { x: 280, y: 150 },
-  "cutting-board": { x: 640, y: 150 },
+// Số thứ tự ô trong items.png (đếm từ trái sang phải, hết hàng thì xuống hàng dưới)
+const ITEM_FRAMES = {
+  "meat:raw": 0,
+  "meat:cooked": 1,
+  "meat:burnt": 2,
+  "tomato:raw": 3,
+  "tomato:chopped": 4,
+  "salad:raw": 5,
+  "salad:chopped": 6,
+  "bread:raw": 7,
+  "dough:raw": 8,
+  "plate:empty": 9,
+  "plate:full": 10,
 };
 
-// Mô tả các trạm nấu / sơ chế.
-const STATIONS = [
-  {
-    ...GRILL,
-    accepts: (item) => item.type === "meat" && item.status === "raw",
-    placeLabel: "Cook meat",
-    progress: (item, st, elapsed) => {
-      if (item.status === "burnt") {
-        return { progress: 1, color: 0x111827, text: "Burnt!" };
-      }
-
-      if (item.status === "cooked") {
-        return {
-          progress: Phaser.Math.Clamp(
-            (elapsed - st.cookTime) / (st.burnTime - st.cookTime),
-            0,
-            1,
-          ),
-          color: 0xf59e0b,
-          text: "Take it out!",
-        };
-      }
-
-      return {
-        progress: Phaser.Math.Clamp(elapsed / st.cookTime, 0, 1),
-        color: 0x22c55e,
-        text: "Cooking...",
-      };
-    },
-  },
-  {
-    ...CUTTING_BOARD,
-    chop: true,
-    accepts: (item) =>
-      (item.type === "tomato" || item.type === "salad") &&
-      item.status === "raw",
-    placeLabel: "Place to chop",
-    progress: (item, st, elapsed) => {
-      if (item.status === "chopped") {
-        return { progress: 1, color: 0x22c55e, text: "Take it out!" };
-      }
-
-      const p = Phaser.Math.Clamp(elapsed / st.cutTime, 0, 1);
-
-      if (st.cutState === "cutting") {
-        return { progress: p, color: 0x38bdf8, text: "Chopping..." };
-      }
-
-      if (st.cutState === "paused") {
-        return { progress: p, color: 0xf59e0b, text: "Press E to resume" };
-      }
-
-      return { progress: p, color: 0x38bdf8, text: "Press E to chop" };
-    },
-  },
-];
-
-// Màu item theo trạng thái nấu
-function itemColor(type, status) {
+function itemFrame(type, status, ingredients = []) {
   if (type === "plate") {
-    return 0xffffff;
+    return ITEM_FRAMES[ingredients.length ? "plate:full" : "plate:empty"];
   }
 
-  if (status === "burnt") {
-    return 0x1f1f1f;
-  }
-
-  if (status === "cooked") {
-    return 0x8b4513;
-  }
-
-  if (status === "chopped") {
-    return type === "tomato" ? 0xff6b6b : 0x86efac;
-  }
-
-  switch (type) {
-    case "meat":
-      return 0xc0392b;
-    case "tomato":
-      return 0xef4444;
-    case "salad":
-      return 0x22c55e;
-    case "bread":
-      return 0xd9a441;
-    case "dough":
-      return 0xf5d6a6;
-    default:
-      return 0x94a3b8;
-  }
+  return ITEM_FRAMES[`${type}:${status}`] ?? ITEM_FRAMES[`${type}:raw`] ?? 0;
 }
 
 // =====================================
 // NHÂN VẬT PIXEL (spritesheet 4 cột x 3 hàng, mỗi khung 16 x 20)
-//   hàng 0: nhìn xuống | hàng 1: nhìn lên | hàng 2: nhìn sang trái
-//   cột   : 0 đứng, 1 bước, 2 đứng, 3 bước
-//   Nhìn sang phải = lật ngang (flipX) hàng 2.
 // =====================================
 
 const CHEF_FRAME_W = 16;
 const CHEF_FRAME_H = 20;
-
-// Chân nhân vật nằm cách tâm logic (this.player) bao nhiêu pixel
 const CHEF_FOOT_OFFSET = 9;
-
 const CHEF_ROW = { down: 0, up: 1, side: 2 };
 
 function createChefAnims(scene, key) {
@@ -242,44 +96,66 @@ function createChefAnims(scene, key) {
   });
 }
 
-// Vị trí món đang cầm so với tâm nhân vật (this.player), theo hướng nhìn
-//  - nhìn xuống: trước bụng, vẽ đè lên người
-//  - nhìn lên  : sau lưng, vẽ dưới người (chỉ ló ra mép)
-//  - nhìn ngang: đưa ra phía trước
 function heldItemOffset(facing, facingRight) {
-  if (facing === "up") {
-    return { x: 5, y: 3, depth: 4 };
-  }
-
-  if (facing === "side") {
-    return { x: facingRight ? 6 : -6, y: 3, depth: 6 };
-  }
-
+  if (facing === "up") return { x: 5, y: 3, depth: 4 };
+  if (facing === "side") return { x: facingRight ? 6 : -6, y: 3, depth: 6 };
   return { x: 0, y: 3, depth: 6 };
 }
 
-// Hướng nhìn theo vector di chuyển
 function chefFacing(dx, dy, current) {
-  if (dx !== 0) {
-    return "side";
-  }
-
-  if (dy !== 0) {
-    return dy > 0 ? "down" : "up";
-  }
-
+  if (dx !== 0) return "side";
+  if (dy !== 0) return dy > 0 ? "down" : "up";
   return current;
+}
+
+// Vẽ hình elip bằng từng pixel (có viền), dùng làm texture: luôn sắc nét khi zoom
+function makePixelDisc(scene, key, w, h, outline) {
+  if (scene.textures.exists(key)) return;
+
+  const tex = scene.textures.createCanvas(key, w, h);
+  const ctx = tex.getContext();
+
+  const inside = (x, y) => {
+    const dx = (x + 0.5 - w / 2) / (w / 2);
+    const dy = (y + 0.5 - h / 2) / (h / 2);
+    return dx * dx + dy * dy <= 1;
+  };
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inside(x, y)) continue;
+
+      const edge =
+        !inside(x - 1, y) ||
+        !inside(x + 1, y) ||
+        !inside(x, y - 1) ||
+        !inside(x, y + 1);
+
+      ctx.fillStyle = edge && outline ? outline : "#ffffff";
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  tex.refresh();
+}
+
+function createPixelTextures(scene) {
+  makePixelDisc(scene, "px-shadow", 12, 4, null);
 }
 
 // =====================================
 // GAME
 // =====================================
 
-/** Creates the Phaser scene with the current player and room context. */
-export function createKitchenScene({ user, roomCode }) {
+/** Creates the Phaser scene with the current player, room and map. */
+export function createKitchenScene({ user, roomCode, mapId }) {
+  const mapCfg = getMapConfig(mapId);
+
   return class KitchenScene extends Phaser.Scene {
     constructor() {
       super("KitchenScene");
+
+      this.mapCfg = mapCfg;
 
       this.otherPlayers = {};
 
@@ -289,16 +165,10 @@ export function createKitchenScene({ user, roomCode }) {
       this.lastSentX = null;
       this.lastSentY = null;
 
-      // Dynamic items (kể cả đĩa)
       this.items = {};
-
-      // Trạng thái các trạm do server gửi
       this.stations = {};
-
-      // Item currently held by local player
       this.heldItemId = null;
 
-      // Interaction
       this.hintSig = null;
       this.hintWidth = 0;
       this.pendingPlateAdd = false;
@@ -313,8 +183,17 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     preload() {
-      this.load.image("kitchen-tiles", kitchenTilesUrl);
-      this.load.tilemapTiledJSON("kitchen", kitchenMapUrl);
+      const cfg = this.mapCfg;
+
+      this.load.tilemapTiledJSON(cfg.id, cfg.mapUrl);
+
+      if (cfg.image) {
+        this.load.image(`${cfg.id}:bg`, cfg.image.url);
+      }
+
+      Object.entries(cfg.tilesets).forEach(([name, url]) =>
+        this.load.image(`${cfg.id}:${name}`, url),
+      );
 
       this.load.spritesheet("chef-blue", chefBlueUrl, {
         frameWidth: CHEF_FRAME_W,
@@ -325,6 +204,11 @@ export function createKitchenScene({ user, roomCode }) {
         frameWidth: CHEF_FRAME_W,
         frameHeight: CHEF_FRAME_H,
       });
+
+      this.load.spritesheet("items", itemsUrl, {
+        frameWidth: 16,
+        frameHeight: 16,
+      });
     }
 
     // =====================================
@@ -333,23 +217,76 @@ export function createKitchenScene({ user, roomCode }) {
 
     create() {
       this.zoomMode = loadZoomMode();
-      // =================================
-      // TILEMAP
-      // =================================
-
-      const map = this.make.tilemap({ key: "kitchen" });
-
-      // Tên đầu tiên phải trùng "name" của tileset trong kitchen.json
-      const tileset = map.addTilesetImage("kitchen-tiles", "kitchen-tiles");
-
-      map.createLayer("floor", tileset).setDepth(0);
-      map.createLayer("walls", tileset).setDepth(1);
-
-      // Layer quầy / đảo / lò: dùng để chặn đường đi
-      this.counters = map.createLayer("counters", tileset).setDepth(2);
+      createPixelTextures(this);
 
       // =================================
-      // HUD (DOM overlay: chữ sắc nét, không bị phóng pixel)
+      // TILEMAP (tự tạo mọi layer)
+      // =================================
+
+      const cfg = this.mapCfg;
+      const map = this.make.tilemap({ key: cfg.id });
+
+      const tilesets = map.tilesets.map((ts) =>
+        map.addTilesetImage(ts.name, `${cfg.id}:${ts.name}`),
+      );
+
+      this.worldW = map.widthInPixels;
+      this.worldH = map.heightInPixels;
+      this.collisionLayers = [];
+
+      this.input.keyboard.on("keydown-ESC", () => {
+        this.closeOrders();
+      });
+
+      // Ảnh nền nguyên bản (nếu map có)
+      if (cfg.image) {
+        this.add
+          .image(0, 0, `${cfg.id}:bg`)
+          .setOrigin(0, 0)
+          .setDisplaySize(cfg.image.width, cfg.image.height)
+          .setDepth(-1);
+      }
+
+      map.layers.forEach((data, i) => {
+        const depth = getProp(data.properties, "depth") ?? i;
+        const layer = map.createLayer(data.name, tilesets).setDepth(depth);
+
+        // Layer chỉ dùng để va chạm thì ẩn đi
+        if (getProp(data.properties, "hidden")) {
+          layer.setVisible(false);
+        }
+
+        if (getProp(data.properties, "collides")) {
+          this.collisionLayers.push(layer);
+        }
+      });
+
+      // Chưa đặt property "collides" cho layer nào → tạm dùng layer "counters"
+      if (this.collisionLayers.length === 0) {
+        const fallback = map.getLayer("counters")?.tilemapLayer;
+
+        if (fallback) {
+          this.collisionLayers.push(fallback);
+        }
+      }
+
+      // =================================
+      // LAYOUT + LUẬT TRẠM
+      // =================================
+
+      this.layout = readLayout(map);
+
+      this.stationDefs = this.layout.stations
+        .filter((s) => STATION_BEHAVIORS[s.kind])
+        .map((s) => ({ ...s, ...STATION_BEHAVIORS[s.kind] }));
+
+      this.plateStation =
+        this.layout.stations.find((s) => s.kind === "plate-station") || null;
+
+      const spawn = this.layout.spawn;
+
+      // =================================
+      // HUD
       // =================================
 
       this.createHud();
@@ -357,24 +294,24 @@ export function createKitchenScene({ user, roomCode }) {
       this.stationBar = this.add.graphics().setDepth(7);
 
       // =================================
-      // CURRENT PLAYER (tạm là hình chữ nhật, sau này thay bằng sprite)
+      // CURRENT PLAYER
       // =================================
 
       this.playerShadow = this.add
-        .ellipse(SPAWN.x, SPAWN.y + 8, 12, 4, 0x000000, 0.25)
+        .image(spawn.x, spawn.y + 8, "px-shadow")
+        .setTint(0x000000)
+        .setAlpha(0.25)
         .setDepth(4);
 
-      // this.player = điểm logic (di chuyển, va chạm, khoảng cách) - ẩn đi.
-      // Hình hiển thị là this.playerSprite, bám theo this.player.
       this.player = this.add
-        .rectangle(SPAWN.x, SPAWN.y, 12, 14, 0x2563eb)
+        .rectangle(spawn.x, spawn.y, 12, 14, 0x2563eb)
         .setVisible(false);
 
       createChefAnims(this, "chef-blue");
       createChefAnims(this, "chef-orange");
 
       this.playerSprite = this.add
-        .sprite(SPAWN.x, SPAWN.y + CHEF_FOOT_OFFSET, "chef-blue", 0)
+        .sprite(spawn.x, spawn.y + CHEF_FOOT_OFFSET, "chef-blue", 0)
         .setOrigin(0.5, 1)
         .setDepth(5);
 
@@ -394,11 +331,7 @@ export function createKitchenScene({ user, roomCode }) {
       this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
       this.input.keyboard.on("keydown-E", (event) => {
-        // Bỏ qua khi giữ phím E (key repeat)
-        if (event && event.repeat) {
-          return;
-        }
-
+        if (event && event.repeat) return;
         this.handleInteract();
       });
 
@@ -407,10 +340,7 @@ export function createKitchenScene({ user, roomCode }) {
       );
 
       this.input.keyboard.on("keydown-Z", (event) => {
-        if (event && event.repeat) {
-          return;
-        }
-
+        if (event && event.repeat) return;
         this.setZoomMode(this.zoomMode === "near" ? "far" : "near");
       });
 
@@ -422,8 +352,6 @@ export function createKitchenScene({ user, roomCode }) {
       // SOCKET
       // =================================
 
-      // Đăng ký listener qua on() để gỡ sạch khi scene tắt
-      // (tránh bị đăng ký trùng khi scene khởi động lại).
       const on = (eventName, handler) => {
         socket.on(eventName, handler);
         this.socketHandlers.push([eventName, handler]);
@@ -435,18 +363,15 @@ export function createKitchenScene({ user, roomCode }) {
         });
 
         this.socketHandlers = [];
+
+        this.closeOrders();
       });
 
-      // Full state
       on("game-state", (state) => {
-        if (!state) {
-          return;
-        }
+        if (!state) return;
 
         Object.values(this.items).forEach((item) => {
-          if (item.sprite) {
-            item.sprite.destroy();
-          }
+          if (item.sprite) item.sprite.destroy();
         });
 
         this.items = {};
@@ -465,7 +390,6 @@ export function createKitchenScene({ user, roomCode }) {
         }
       });
 
-      // Item / plate
       [
         "item-created",
         "item-picked",
@@ -476,49 +400,68 @@ export function createKitchenScene({ user, roomCode }) {
       ].forEach((eventName) => {
         on(eventName, (payload) => {
           const item = payload?.item || payload?.plate;
-
-          if (item) {
-            this.upsertItem(item);
-          }
+          if (item) this.upsertItem(item);
         });
       });
 
       on("station-updated", ({ station, item }) => {
-        if (item) {
-          this.upsertItem(item);
-        }
+        if (item) this.upsertItem(item);
+        if (station) this.setStationState(station);
+      });
 
-        if (station) {
-          this.setStationState(station);
-        }
+      // Danh sách đơn thay đổi (đơn mới / hết hạn / hoàn thành): chỉ cập nhật dữ liệu,
+      // nếu bảng đang mở thì vẽ lại. KHÔNG tự bật bảng lên.
+      on("orders-updated", ({ orders, score }) => {
+        this.currentOrders = orders || [];
+        this.ordersReceivedAt = Date.now();
+
+        if (typeof score === "number") this.setScore(score);
+        if (this.ordersEl) this.renderOrders();
+      });
+
+      // Trả lời riêng cho người bấm E ở order station → mở bảng
+      on("orders-list", ({ orders }) => {
+        this.currentOrders = orders || [];
+        this.ordersReceivedAt = Date.now();
+        this.openOrders();
+      });
+
+      // Vật phẩm bị xoá (vứt thùng rác / phục vụ xong) → hết bị "dính tay"
+      on("item-removed", ({ itemId }) => {
+        this.removeItemVisual(itemId);
+      });
+
+      on("order-completed", ({ order, points, score, userId: who }) => {
+        if (typeof score === "number") this.setScore(score);
+
+        const name = order?.name || "dish";
+
+        this.showToast(
+          who === user.id
+            ? `${name} served! +${points ?? 0}`
+            : `Teammate served ${name}! +${points ?? 0}`,
+          "#22c55e",
+        );
       });
 
       on("interaction-error", ({ message }) => {
         console.warn("Server:", message);
+        this.showToast(message, "#ef4444");
       });
 
       on("player-position", ({ userId, x, y, t }) => {
-        if (userId === user.id) {
-          return;
-        }
-
+        if (userId === user.id) return;
         this.updateOtherPlayer(userId, x, y, t);
       });
 
       on("player-joined", ({ userId }) => {
-        if (userId === user.id) {
-          return;
-        }
-
+        if (userId === user.id) return;
         console.log("Player joined:", userId);
       });
 
       on("player-left", ({ userId }) => {
         const other = this.otherPlayers[userId];
-
-        if (!other) {
-          return;
-        }
+        if (!other) return;
 
         other.player.destroy();
         other.shadow.destroy();
@@ -526,14 +469,12 @@ export function createKitchenScene({ user, roomCode }) {
         delete this.otherPlayers[userId];
       });
 
-      // Rớt mạng: bỏ trạng thái "đang cầm" để không bị kẹt tay
       on("disconnect", () => {
         this.heldItemId = null;
       });
 
-      // Kết nối (hoặc nối lại) → vào phòng để nhận game-state mới
       const joinRoom = () => {
-        socket.emit("join-room", { roomCode, userId: user.id });
+        socket.emit("join-room", { roomCode, userId: user.id, mapId });
       };
 
       on("connect", joinRoom);
@@ -546,8 +487,25 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     // =====================================
-    // COLLISION (đọc từ layer "counters")
+    // COLLISION (đọc từ property của layer / tile)
     // =====================================
+
+    tileBlockHeight(tile) {
+      // 1. property trên tile
+      let h = getProp(tile.properties, "blockHeight");
+      if (h !== undefined) return h;
+
+      // 2. property trong tileset (Tiled)
+      const ts = tile.tileset;
+      h = getProp(
+        ts?.tileProperties?.[tile.index - ts.firstgid],
+        "blockHeight",
+      );
+      if (h !== undefined) return h;
+
+      // 3. bảng trong config.js; không có thì chặn cả ô
+      return this.mapCfg.blockHeights?.[tile.index] ?? tile.height;
+    }
 
     isBlocked(x, y) {
       const points = [
@@ -558,33 +516,19 @@ export function createKitchenScene({ user, roomCode }) {
       ];
 
       return points.some(([px, py]) => {
-        if (px < 0 || px > WORLD_W || py > WORLD_H) {
+        if (px < 0 || px > this.worldW || py > this.worldH) {
           return true;
         }
 
-        const tile = this.counters.getTileAtWorldXY(px, py);
+        return this.collisionLayers.some((layer) => {
+          const tile = layer.getTileAtWorldXY(px, py);
 
-        if (!tile) {
-          return false;
-        }
+          if (!tile) return false;
 
-        // Tủ gỗ: chỉ chặn nửa trên (phía gần mặt bàn)
-        if (CABINET_GIDS.has(tile.index)) {
-          return py - tile.pixelY < CABINET_BLOCK_H;
-        }
-
-        // Mặt bàn, lò...: chặn cả ô
-        return true;
+          return py - tile.pixelY < this.tileBlockHeight(tile);
+        });
       });
     }
-
-    // =====================================
-    // COLLISION GIỮA NGƯỜI CHƠI
-    //
-    // Chặn bước đi nếu vị trí mới chạm người khác.
-    // Nếu đang chồng nhau sẵn (vd. cùng điểm spawn) thì vẫn cho bước
-    // khi bước đó làm 2 người xa nhau hơn -> tự tách ra, không bị kẹt.
-    // =====================================
 
     blockedByOtherPlayer(x, y) {
       return Object.values(this.otherPlayers).some((other) => {
@@ -609,22 +553,12 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     upsertItem(itemData) {
-      if (!itemData?.id) {
-        return;
-      }
+      if (!itemData?.id) return;
 
       if (!this.items[itemData.id]) {
-        const isPlate = itemData.type === "plate";
-
-        const sprite = isPlate
-          ? this.add
-              .ellipse(itemData.x, itemData.y, 14, 9, 0xffffff)
-              .setStrokeStyle(1, 0x94a3b8)
-              .setDepth(6)
-          : this.add
-              .circle(itemData.x, itemData.y, 4, 0xffffff)
-              .setStrokeStyle(1, 0x4e2a0b)
-              .setDepth(6);
+        const sprite = this.add
+          .image(itemData.x, itemData.y, "items", 0)
+          .setDepth(3);
 
         this.items[itemData.id] = {
           id: itemData.id,
@@ -643,27 +577,19 @@ export function createKitchenScene({ user, roomCode }) {
       item.x = itemData.x;
       item.y = itemData.y;
 
-      // Theo dõi item đang cầm của mình
       if (item.state === "held" && item.userId === user.id) {
         this.heldItemId = item.id;
       } else if (this.heldItemId === item.id) {
         this.heldItemId = null;
       }
 
-      // Màu: sống / chín / cháy / đã thái (đĩa có đồ thì ngả vàng)
-      if (item.type === "plate") {
-        item.sprite.setFillStyle(item.ingredients.length ? 0xfde68a : 0xffffff);
-      } else {
-        item.sprite.setFillStyle(itemColor(item.type, item.status));
-      }
+      item.sprite.setFrame(itemFrame(item.type, item.status, item.ingredients));
 
-      // Đang được cầm → ẩn, vẽ trên đầu người cầm
       if (item.state === "held") {
         item.sprite.setVisible(false);
         return;
       }
 
-      // Dưới đất hoặc trên trạm
       item.sprite.setVisible(true);
       item.sprite.x = item.x;
       item.sprite.y = item.y;
@@ -671,20 +597,13 @@ export function createKitchenScene({ user, roomCode }) {
 
     removeItemVisual(itemId) {
       const item = this.items[itemId];
+      if (!item) return;
 
-      if (!item) {
-        return;
-      }
-
-      if (item.sprite) {
-        item.sprite.destroy();
-      }
+      if (item.sprite) item.sprite.destroy();
 
       delete this.items[itemId];
 
-      if (this.heldItemId === itemId) {
-        this.heldItemId = null;
-      }
+      if (this.heldItemId === itemId) this.heldItemId = null;
     }
 
     setScore(value) {
@@ -696,9 +615,7 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     setStationState(stationData) {
-      if (!stationData?.id) {
-        return;
-      }
+      if (!stationData?.id) return;
 
       this.stations[stationData.id] = {
         id: stationData.id,
@@ -713,33 +630,34 @@ export function createKitchenScene({ user, roomCode }) {
       };
     }
 
-    // Zoom nguyên: đủ sát, nhưng không bao giờ để vùng nhìn lớn hơn map
+    // =====================================
+    // CAMERA / ZOOM
+    // =====================================
+
     computeZoom() {
       const gw = this.scale.width;
       const gh = this.scale.height;
 
-      // Zoom vừa khít để thấy trọn map ("contain")
-      const fitZoom = Math.min(gw / WORLD_W, gh / WORLD_H);
+      // far: vừa khít để thấy trọn map
+      const fitZoom = Math.min(gw / this.worldW, gh / this.worldH);
 
       if (this.zoomMode === "far") {
         return fitZoom;
       }
 
-      // near: sát nhân vật, nhưng không bao giờ xa hơn mức far
-      return Math.max(fitZoom, gw / CAMERA_VIEW_W.near);
+      // near: sát nhân vật, không bao giờ xa hơn mức far
+      return Math.max(fitZoom, gw / this.mapCfg.zoomNear);
     }
 
     setZoomMode(mode) {
-      if (mode === this.zoomMode) {
-        return;
-      }
+      if (mode === this.zoomMode) return;
 
       this.zoomMode = mode;
 
       try {
         localStorage.setItem(ZOOM_STORAGE_KEY, mode);
       } catch {
-        // trình duyệt chặn localStorage thì bỏ qua, chỉ không nhớ được lựa chọn
+        // bỏ qua
       }
 
       this.cameras.main.setZoom(this.computeZoom());
@@ -754,12 +672,12 @@ export function createKitchenScene({ user, roomCode }) {
 
     setupCamera() {
       const cam = this.cameras.main;
-      cam.setBackgroundColor("#12302e");
-      cam.setBounds(0, 0, WORLD_W, WORLD_H);
+
+      cam.setBackgroundColor(this.mapCfg.background);
+      cam.setBounds(0, 0, this.worldW, this.worldH);
       cam.setZoom(this.computeZoom());
       cam.startFollow(this.player, true, CAMERA_LERP, CAMERA_LERP);
 
-      // Đổi kích thước cửa sổ → tính lại zoom
       const onResize = () => cam.setZoom(this.computeZoom());
       this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
@@ -767,14 +685,11 @@ export function createKitchenScene({ user, roomCode }) {
         this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
       });
 
-      // Đặt HUD SAU khi camera vẽ xong để không bị lệch một nhịp so với nhân vật
       cam.on(Phaser.Cameras.Scene2D.Events.POST_RENDER, () => this.layoutHud());
     }
+
     // =====================================
-    // HUD  (score / gợi ý phím / chữ trạng thái trạm)
-    //
-    // Vẽ bằng HTML đặt đè lên canvas để chữ luôn sắc nét,
-    // vị trí được tính lại theo kích thước canvas mỗi khung hình.
+    // HUD
     // =====================================
 
     createHud() {
@@ -800,27 +715,23 @@ export function createKitchenScene({ user, roomCode }) {
       this.hudRoot = root;
       this.hudHintVisible = false;
 
-      // Score
       this.hudScore = make(
         "background:#12302e;border-radius:.4em;padding:.2em .8em;transform:translate(-50%,-50%);",
       );
       this.hudScore.textContent = `SCORE  ${this.score}`;
 
-      // Hint (phím E / Q)
       this.hudHint = make(
         "display:none;background:rgba(18,48,46,.95);border-radius:.6em;padding:.35em .6em;transform:translate(-50%,-100%);",
       );
 
-      // Nhãn zoom (góc dưới bên phải)
       this.hudZoom = make(
         "background:rgba(18,48,46,.85);border-radius:.4em;padding:.2em .6em;font-size:.8em;transform:translate(-100%,-100%);",
       );
       this.updateZoomLabel();
 
-      // Chữ trạng thái của trạm (Chopping..., Take it out!...)
       this.stationLabels = {};
 
-      STATIONS.forEach((cfg) => {
+      this.stationDefs.forEach((cfg) => {
         const el = make(
           "display:none;background:#12302e;border-radius:.3em;padding:.1em .5em;transform:translate(-50%,-100%);font-size:.85em;",
         );
@@ -852,32 +763,26 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     layoutHud() {
-      if (!this.hudRoot || !this.game.canvas) {
-        return;
-      }
+      if (!this.hudRoot || !this.game.canvas) return;
 
       const cam = this.cameras.main;
       const rect = this.game.canvas.getBoundingClientRect();
 
-      // số pixel màn hình cho mỗi pixel của map
       const k = cam.zoom * (rect.width / this.scale.width);
       const view = cam.worldView;
 
       const sx = (x) => rect.left + (x - view.x) * k;
       const sy = (y) => rect.top + (y - view.y) * k;
 
-      // Cỡ chữ theo chiều cao cửa sổ, không phụ thuộc zoom
       const fs = Phaser.Math.Clamp(Math.round(rect.height / 50), 12, 20);
       this.hudRoot.style.fontSize = `${fs}px`;
 
-      // Score: cố định giữa phía trên màn hình
       this.hudScore.style.left = `${rect.left + rect.width / 2}px`;
       this.hudScore.style.top = `${rect.top + fs * 1.6}px`;
 
       this.hudZoom.style.left = `${rect.right - fs}px`;
       this.hudZoom.style.top = `${rect.bottom - fs}px`;
 
-      // Hint: ngay trên đầu người chơi
       if (this.hudHintVisible) {
         const w = this.hudHint.offsetWidth;
 
@@ -891,8 +796,7 @@ export function createKitchenScene({ user, roomCode }) {
         this.hudHint.style.top = `${Math.max(sy(this.player.y - 13), rect.top + fs * 3)}px`;
       }
 
-      // Chữ trạng thái trạm: phía trên thanh tiến độ
-      STATIONS.forEach((cfg) => {
+      this.stationDefs.forEach((cfg) => {
         const label = this.stationLabels[cfg.id];
 
         if (label && label.visible) {
@@ -907,17 +811,12 @@ export function createKitchenScene({ user, roomCode }) {
         ? entries.map((e) => `${e.key}:${e.label}`).join("|")
         : "";
 
-      if (sig === this.hintSig) {
-        return;
-      }
+      if (sig === this.hintSig) return;
 
       this.hintSig = sig;
 
       const box = this.hudHint;
-
-      if (!box) {
-        return;
-      }
+      if (!box) return;
 
       box.textContent = "";
 
@@ -944,7 +843,6 @@ export function createKitchenScene({ user, roomCode }) {
         box.appendChild(wrap);
       });
 
-      // Mũi tên nhỏ chỉ xuống người chơi
       const arrow = document.createElement("div");
       arrow.style.cssText =
         "position:absolute;left:50%;bottom:-.4em;transform:translateX(-50%);width:0;height:0;" +
@@ -962,7 +860,9 @@ export function createKitchenScene({ user, roomCode }) {
     updateOtherPlayer(userId, x, y, t) {
       if (!this.otherPlayers[userId]) {
         const shadow = this.add
-          .ellipse(x, y + 8, 12, 4, 0x000000, 0.25)
+          .image(x, y + 8, "px-shadow")
+          .setTint(0x000000)
+          .setAlpha(0.25)
           .setDepth(4);
 
         const player = this.add
@@ -970,9 +870,6 @@ export function createKitchenScene({ user, roomCode }) {
           .setOrigin(0.5, 1)
           .setDepth(5);
 
-        // samples = các mốc vị trí {t, x, y} theo giờ của người gửi
-        // clockOffset = chênh lệch đồng hồ (giờ nhận - giờ gửi), lấy mức nhỏ nhất
-        // cur = vị trí đang vẽ, prev = vị trí khung hình trước
         this.otherPlayers[userId] = {
           shadow,
           player,
@@ -988,7 +885,6 @@ export function createKitchenScene({ user, roomCode }) {
 
       const other = this.otherPlayers[userId];
 
-      // Ước lượng chênh lệch đồng hồ giữa 2 máy
       const sentAt = typeof t === "number" ? t : Date.now();
       const sample = Date.now() - sentAt;
 
@@ -997,7 +893,6 @@ export function createKitchenScene({ user, roomCode }) {
           ? sample
           : Math.min(sample, other.clockOffset + 1);
 
-      // Hướng nhìn theo hướng di chuyển giữa 2 mốc vị trí
       const last = other.samples[other.samples.length - 1];
 
       const mdx = last ? x - last.x : 0;
@@ -1019,26 +914,21 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     // =====================================
-    // INTERACTION  (một nguồn duy nhất cho phím E + gợi ý)
+    // INTERACTION
     // =====================================
 
     distanceTo(x, y) {
       return Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
     }
 
-    // Item nằm dưới đất gần nhất (item thường và đĩa)
     findNearbyItem() {
-      if (!this.player) {
-        return null;
-      }
+      if (!this.player) return null;
 
       let closest = null;
       let closestDistance = Infinity;
 
       Object.values(this.items).forEach((item) => {
-        if (item.state !== "available") {
-          return;
-        }
+        if (item.state !== "available") return;
 
         const distance = this.distanceTo(item.x, item.y);
 
@@ -1051,11 +941,227 @@ export function createKitchenScene({ user, roomCode }) {
       return closest;
     }
 
-    // Trả về { label, run } cho hành động E hiện tại, hoặc null.
-    findInteraction() {
-      if (!this.player) {
-        return null;
+    // =====================================
+    // BẢNG ĐƠN HÀNG (HTML đặt đè giữa màn hình)
+    // =====================================
+
+    showOrders(orders = []) {
+      this.currentOrders = orders;
+      this.ordersReceivedAt = Date.now();
+      this.openOrders();
+    }
+
+    openOrders() {
+      if (!this.ordersEl) {
+        const el = document.createElement("div");
+
+        el.style.cssText =
+          "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;" +
+          "width:min(440px,92vw);background:rgba(32,35,43,.97);border:3px solid #f0b44d;" +
+          "border-radius:12px;padding:16px 18px;color:#fff;box-shadow:0 10px 36px rgba(0,0,0,.55);" +
+          "font-family:'Trebuchet MS','Segoe UI',Verdana,sans-serif;";
+
+        document.body.appendChild(el);
+
+        this.ordersEl = el;
+
+        // Đồng hồ đếm ngược chạy mỗi 0,5 giây khi bảng đang mở
+        this.ordersTimer = window.setInterval(() => this.renderOrders(), 500);
       }
+
+      this.renderOrders();
+    }
+
+    renderOrders() {
+      const el = this.ordersEl;
+
+      if (!el) return;
+
+      const orders = this.currentOrders || [];
+
+      // Thời gian còn lại = số server gửi - thời gian đã trôi từ lúc nhận
+      // (không dùng đồng hồ server nên không bị lệch giờ giữa 2 máy)
+      const elapsed = Date.now() - (this.ordersReceivedAt || Date.now());
+
+      el.textContent = "";
+
+      const head = document.createElement("div");
+      head.style.cssText =
+        "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;";
+
+      const title = document.createElement("div");
+      title.textContent = "CUSTOMER ORDERS";
+      title.style.cssText = "font-size:20px;font-weight:800;color:#ffd166;";
+
+      const close = document.createElement("button");
+      close.textContent = "X";
+      close.style.cssText =
+        "pointer-events:auto;cursor:pointer;border:0;border-radius:6px;background:#a83232;" +
+        "color:#fff;font-weight:800;font-size:16px;padding:4px 10px;";
+      close.onclick = () => this.closeOrders();
+
+      head.append(title, close);
+      el.appendChild(head);
+
+      if (orders.length === 0) {
+        const none = document.createElement("div");
+        none.textContent = "No active orders";
+        none.style.cssText = "padding:10px 0;color:#cbd5e1;";
+        el.appendChild(none);
+      }
+
+      const RECIPE_HINT = {
+        hamburger: "Bread + cooked meat + chopped tomato",
+        pizza: "Dough + chopped tomato",
+        salad: "Chopped salad",
+      };
+
+      orders.forEach((order, i) => {
+        const remaining = Math.max(0, (order.remainingMs ?? 0) - elapsed);
+        const seconds = Math.ceil(remaining / 1000);
+        const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+        const ratio = order.durationMs
+          ? Math.min(1, remaining / order.durationMs)
+          : 0;
+
+        const row = document.createElement("div");
+        row.style.cssText =
+          "padding:8px 0;border-top:1px solid rgba(255,255,255,.12);";
+
+        const line = document.createElement("div");
+        line.style.cssText =
+          "display:flex;justify-content:space-between;font-weight:700;";
+
+        const name = document.createElement("span");
+        name.textContent = `${i + 1}. ${order.name || order.recipeId}`;
+
+        const time = document.createElement("span");
+        time.textContent = mmss;
+        time.style.color = remaining < 15000 ? "#ff6666" : "#9be7a5";
+
+        line.append(name, time);
+
+        const hint = document.createElement("div");
+        hint.textContent = RECIPE_HINT[order.recipeId] || "";
+        hint.style.cssText = "font-size:12px;color:#94a3b8;margin:2px 0 6px;";
+
+        const bar = document.createElement("div");
+        bar.style.cssText =
+          "height:5px;border-radius:3px;background:#3b4150;overflow:hidden;";
+
+        const fillBar = document.createElement("div");
+        fillBar.style.cssText = `height:100%;width:${ratio * 100}%;background:${remaining < 15000 ? "#ef4444" : "#22c55e"};`;
+
+        bar.appendChild(fillBar);
+        row.append(line, hint, bar);
+        el.appendChild(row);
+      });
+
+      const foot = document.createElement("div");
+      foot.textContent = "Press E or ESC to close";
+      foot.style.cssText =
+        "margin-top:10px;font-size:12px;color:#94a3b8;text-align:right;";
+      el.appendChild(foot);
+    }
+
+    closeOrders() {
+      if (this.ordersTimer) {
+        window.clearInterval(this.ordersTimer);
+        this.ordersTimer = null;
+      }
+
+      if (this.ordersEl) {
+        this.ordersEl.remove();
+        this.ordersEl = null;
+      }
+    }
+
+    // Thông báo ngắn giữa phía trên màn hình (phục vụ xong, lỗi...)
+    showToast(text, color = "#22c55e") {
+      if (!this.hudRoot || !this.game.canvas) return;
+
+      const rect = this.game.canvas.getBoundingClientRect();
+      const el = document.createElement("div");
+
+      el.textContent = text;
+      el.style.cssText =
+        `position:absolute;left:${rect.left + rect.width / 2}px;top:${rect.top + rect.height * 0.14}px;` +
+        `transform:translate(-50%,-50%);background:${color};color:#fff;font-weight:800;` +
+        "padding:.4em .9em;border-radius:.5em;white-space:nowrap;transition:opacity .4s;" +
+        "box-shadow:0 4px 14px rgba(0,0,0,.35);";
+
+      this.hudRoot.appendChild(el);
+
+      window.setTimeout(() => (el.style.opacity = "0"), 1800);
+      window.setTimeout(() => el.remove(), 2300);
+    }
+
+    findInteraction() {
+      if (!this.player) return null;
+
+      const special = this.layout.stations.filter((s) =>
+        ["trash-bin", "order-station", "serving-counter"].includes(s.kind),
+      );
+
+      let specialBest = null;
+
+      for (const station of special) {
+        const d = this.distanceTo(station.x, station.y);
+
+        if (d > INTERACT_RANGE) continue;
+
+        let label = null;
+        let run = null;
+
+        if (station.kind === "order-station") {
+          label = this.ordersEl ? "Close orders" : "View orders";
+
+          run = () => {
+            if (this.ordersEl) {
+              this.closeOrders();
+              return;
+            }
+
+            socket.emit("request-orders", {
+              roomCode,
+              playerX: this.player.x,
+              playerY: this.player.y,
+            });
+          };
+        } else if (station.kind === "trash-bin" && this.heldItemId) {
+          label = "Throw item away";
+
+          run = () =>
+            socket.emit("use-trash-bin", {
+              roomCode,
+              userId: user.id,
+              itemId: this.heldItemId,
+              playerX: this.player.x,
+              playerY: this.player.y,
+            });
+        } else if (
+          station.kind === "serving-counter" &&
+          this.heldItemId &&
+          this.items[this.heldItemId]?.type === "plate"
+        ) {
+          label = "Serve dish";
+
+          run = () =>
+            socket.emit("serve-order", {
+              roomCode,
+              userId: user.id,
+              itemId: this.heldItemId,
+              playerX: this.player.x,
+              playerY: this.player.y,
+            });
+        }
+
+        if (label && (!specialBest || d < specialBest.d)) {
+          specialBest = { d, label, run };
+        }
+      }
+
+      if (specialBest) return specialBest;
 
       // ---------------------------------
       // ĐANG CẦM ITEM
@@ -1063,29 +1169,19 @@ export function createKitchenScene({ user, roomCode }) {
       if (this.heldItemId) {
         const held = this.items[this.heldItemId];
 
-        if (!held) {
-          return null;
-        }
+        if (!held) return null;
 
         let best = null;
 
-        // 1. Đặt item lên trạm phù hợp
-        for (const cfg of STATIONS) {
+        for (const cfg of this.stationDefs) {
           const station = this.stations[cfg.id];
 
-          if (station && station.itemId) {
-            continue;
-          }
-
-          if (!cfg.accepts(held)) {
-            continue;
-          }
+          if (station && station.itemId) continue;
+          if (!cfg.accepts(held)) continue;
 
           const d = this.distanceTo(cfg.x, cfg.y);
 
-          if (d > INTERACT_RANGE) {
-            continue;
-          }
+          if (d > INTERACT_RANGE) continue;
 
           if (!best || d < best.d) {
             best = {
@@ -1096,18 +1192,13 @@ export function createKitchenScene({ user, roomCode }) {
           }
         }
 
-        // 2. Đặt nguyên liệu đang cầm lên đĩa dưới đất
         if (held.type !== "plate") {
           Object.values(this.items).forEach((item) => {
-            if (item.type !== "plate" || item.state !== "available") {
-              return;
-            }
+            if (item.type !== "plate" || item.state !== "available") return;
 
             const d = this.distanceTo(item.x, item.y);
 
-            if (d > INTERACT_RANGE) {
-              return;
-            }
+            if (d > INTERACT_RANGE) return;
 
             if (!best || d < best.d) {
               best = {
@@ -1126,7 +1217,6 @@ export function createKitchenScene({ user, roomCode }) {
       // TAY TRỐNG
       // ---------------------------------
 
-      // 1. Nhặt item hoặc đĩa đang nằm dưới đất
       const floorItem = this.findNearbyItem();
 
       if (floorItem) {
@@ -1136,36 +1226,25 @@ export function createKitchenScene({ user, roomCode }) {
         };
       }
 
-      // 2. Lấy từ trạm / bàn đĩa / kệ
       let best = null;
 
       const consider = (d, label, run) => {
-        if (d > INTERACT_RANGE) {
-          return;
-        }
+        if (d > INTERACT_RANGE) return;
 
         if (!best || d < best.d) {
           best = { d, label, run };
         }
       };
 
-      // Thớt: bấm E để thái / thái tiếp
-      // (đặt TRƯỚC nhánh "Take" để thắng khi khoảng cách bằng nhau)
-      STATIONS.forEach((cfg) => {
-        if (!cfg.chop) {
-          return;
-        }
+      // Thớt: bấm E để thái / thái tiếp (đặt trước nhánh "Take")
+      this.stationDefs.forEach((cfg) => {
+        if (!cfg.chop) return;
 
         const station = this.stations[cfg.id];
         const item = station && station.itemId && this.items[station.itemId];
 
-        if (!item || item.status !== "raw") {
-          return;
-        }
-
-        if (!["idle", "paused"].includes(station.cutState)) {
-          return;
-        }
+        if (!item || item.status !== "raw") return;
+        if (!["idle", "paused"].includes(station.cutState)) return;
 
         consider(
           this.distanceTo(cfg.x, cfg.y),
@@ -1174,13 +1253,11 @@ export function createKitchenScene({ user, roomCode }) {
         );
       });
 
-      STATIONS.forEach((cfg) => {
+      this.stationDefs.forEach((cfg) => {
         const station = this.stations[cfg.id];
         const item = station && station.itemId && this.items[station.itemId];
 
-        if (!item) {
-          return;
-        }
+        if (!item) return;
 
         consider(
           this.distanceTo(cfg.x, cfg.y),
@@ -1189,13 +1266,15 @@ export function createKitchenScene({ user, roomCode }) {
         );
       });
 
-      consider(
-        this.distanceTo(PLATE_STATION.x, PLATE_STATION.y),
-        "Take plate",
-        () => this.takePlate(),
-      );
+      if (this.plateStation) {
+        consider(
+          this.distanceTo(this.plateStation.x, this.plateStation.y),
+          "Take plate",
+          () => this.takePlate(),
+        );
+      }
 
-      SHELVES.forEach((shelf) => {
+      this.layout.shelves.forEach((shelf) => {
         consider(this.distanceTo(shelf.x, shelf.y), `Take ${shelf.type}`, () =>
           this.takeIngredientFromShelf(shelf),
         );
@@ -1203,59 +1282,51 @@ export function createKitchenScene({ user, roomCode }) {
 
       return best;
     }
-
     handleInteract() {
       const action = this.findInteraction();
 
-      if (action) {
-        action.run();
-      }
+      console.log(
+        "E tại",
+        Math.round(this.player.x),
+        Math.round(this.player.y),
+        "| held:",
+        this.heldItemId,
+        "| hành động:",
+        action ? action.label : "KHÔNG CÓ",
+      );
+
+      if (action) action.run();
     }
 
     // =====================================
     // ACTIONS (emit lên server)
     // =====================================
 
-    // Toạ độ gửi lên server khi tương tác với một kệ / trạm
-    serverPos(targetId) {
-      if (SERVER_USES_OLD_COORDS && SERVER_POS[targetId]) {
-        return SERVER_POS[targetId];
-      }
-
-      return { x: this.player.x, y: this.player.y };
-    }
-
     takeIngredientFromShelf(shelf) {
-      if (!this.player || this.heldItemId) {
-        return;
-      }
+      if (!this.player || this.heldItemId) return;
 
       socket.emit("take-ingredient", {
         roomCode,
         userId: user.id,
         shelfId: shelf.id,
-        playerX: this.serverPos(shelf.id).x,
-        playerY: this.serverPos(shelf.id).y,
+        playerX: this.player.x,
+        playerY: this.player.y,
       });
     }
 
     takePlate() {
-      if (!this.player || this.heldItemId) {
-        return;
-      }
+      if (!this.player || this.heldItemId) return;
 
       socket.emit("take-plate", {
         roomCode,
         userId: user.id,
-        playerX: this.serverPos(PLATE_STATION.id).x,
-        playerY: this.serverPos(PLATE_STATION.id).y,
+        playerX: this.player.x,
+        playerY: this.player.y,
       });
     }
 
     pickUpItem(itemId) {
-      if (!itemId || this.heldItemId) {
-        return;
-      }
+      if (!itemId || this.heldItemId) return;
 
       socket.emit("pick-up-item", {
         roomCode,
@@ -1267,39 +1338,32 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     placeOnStation(stationId) {
-      if (!this.heldItemId) {
-        return;
-      }
+      if (!this.heldItemId) return;
 
       socket.emit("place-on-station", {
         roomCode,
         userId: user.id,
         stationId,
         itemId: this.heldItemId,
-        playerX: this.serverPos(stationId).x,
-        playerY: this.serverPos(stationId).y,
+        playerX: this.player.x,
+        playerY: this.player.y,
       });
     }
 
     takeFromStation(stationId) {
-      if (this.heldItemId) {
-        return;
-      }
+      if (this.heldItemId) return;
 
       socket.emit("take-from-station", {
         roomCode,
         userId: user.id,
         stationId,
-        playerX: this.serverPos(stationId).x,
-        playerY: this.serverPos(stationId).y,
+        playerX: this.player.x,
+        playerY: this.player.y,
       });
     }
 
-    // Bấm E ở thớt: bắt đầu thái / thái tiếp
     startCutting(stationId) {
-      if (this.heldItemId) {
-        return;
-      }
+      if (this.heldItemId) return;
 
       socket.emit("start-cutting", {
         roomCode,
@@ -1311,11 +1375,8 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     addIngredientToPlate(plateId) {
-      if (!this.heldItemId || this.pendingPlateAdd) {
-        return;
-      }
+      if (!this.heldItemId || this.pendingPlateAdd) return;
 
-      // Chặn bấm E liên tục gửi trùng
       this.pendingPlateAdd = true;
       this.time.delayedCall(400, () => {
         this.pendingPlateAdd = false;
@@ -1332,9 +1393,7 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     dropItem() {
-      if (!this.heldItemId) {
-        return;
-      }
+      if (!this.heldItemId) return;
 
       socket.emit("drop-item", {
         roomCode,
@@ -1346,13 +1405,13 @@ export function createKitchenScene({ user, roomCode }) {
     }
 
     // =====================================
-    // STATION VIEW (thanh tiến độ + chữ trạng thái)
+    // STATION VIEW
     // =====================================
 
     updateStationViews() {
       this.stationBar.clear();
 
-      STATIONS.forEach((cfg) => {
+      this.stationDefs.forEach((cfg) => {
         const label = this.stationLabels[cfg.id];
         const station = this.stations[cfg.id];
         const item =
@@ -1363,13 +1422,11 @@ export function createKitchenScene({ user, roomCode }) {
           return;
         }
 
-        // Item trên trạm: server có thể đặt ở toạ độ cũ → luôn vẽ tại trạm
         if (item.sprite && item.sprite.visible) {
           item.sprite.x = cfg.x;
           item.sprite.y = cfg.y;
         }
 
-        // Thớt chỉ cho thanh chạy khi đang thái; grill luôn chạy
         const live = !station.cutState || station.cutState === "cutting";
 
         const elapsed =
@@ -1388,9 +1445,7 @@ export function createKitchenScene({ user, roomCode }) {
         this.stationBar.fillStyle(color, 1);
         this.stationBar.fillRect(barX, barY, barW * progress, barH);
 
-        if (label.text !== text) {
-          label.setText(text);
-        }
+        if (label.text !== text) label.setText(text);
 
         label.setVisible(true);
       });
@@ -1400,10 +1455,8 @@ export function createKitchenScene({ user, roomCode }) {
     // NHÂN VẬT: vị trí + animation
     // =====================================
 
-    updateChefSprites(dx, dy, delta) {
-      if (!this.playerSprite) {
-        return;
-      }
+    updateChefSprites(dx, dy) {
+      if (!this.playerSprite) return;
 
       const moving = dx !== 0 || dy !== 0;
 
@@ -1421,15 +1474,12 @@ export function createKitchenScene({ user, roomCode }) {
         true,
       );
 
-      // Người chơi khác: nội suy giữa các mốc vị trí theo thời gian người gửi,
-      // vẽ chậm INTERP_DELAY_MS để luôn có mốc kế tiếp -> tốc độ đều, không giật
       Object.values(this.otherPlayers).forEach((other) => {
         const buf = other.samples;
 
         if (buf.length > 0 && other.clockOffset !== null) {
           const renderT = Date.now() - other.clockOffset - INTERP_DELAY_MS;
 
-          // Bỏ các mốc đã qua (luôn giữ ít nhất 2 mốc)
           while (buf.length > 2 && buf[1].t <= renderT) {
             buf.shift();
           }
@@ -1441,7 +1491,6 @@ export function createKitchenScene({ user, roomCode }) {
             other.curX = a.x;
             other.curY = a.y;
           } else if (renderT >= b.t || b.t - a.t > 400) {
-            // Đã tới mốc cuối, hoặc 2 mốc cách nhau quá lâu (tab bị treo): đặt thẳng
             other.curX = b.x;
             other.curY = b.y;
           } else {
@@ -1452,7 +1501,6 @@ export function createKitchenScene({ user, roomCode }) {
           }
         }
 
-        // Có dịch chuyển trong khung hình này -> đang đi bộ
         const moving =
           Math.hypot(other.curX - other.prevX, other.curY - other.prevY) > 0.02;
 
@@ -1476,31 +1524,22 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     sendPosition() {
-      if (!socket.connected) {
-        return;
-      }
+      if (!socket.connected) return;
 
       const x = Math.round(this.player.x);
       const y = Math.round(this.player.y);
 
-      if (x === this.lastSentX && y === this.lastSentY) {
-        return;
-      }
+      if (x === this.lastSentX && y === this.lastSentY) return;
 
-      // Giới hạn ~20 lần/giây. Khi dừng lại, vị trí cuối vẫn được gửi
-      // ở lần kiểm tra kế tiếp vì nó vẫn khác lần gửi trước.
       const nowMs = performance.now();
 
-      if (nowMs - (this.lastSentAt || 0) < POSITION_SEND_INTERVAL) {
-        return;
-      }
+      if (nowMs - (this.lastSentAt || 0) < POSITION_SEND_INTERVAL) return;
 
       this.lastSentAt = nowMs;
 
       this.lastSentX = x;
       this.lastSentY = y;
 
-      // volatile: nếu mạng nghẽn thì bỏ gói cũ thay vì xếp hàng rồi dồn cục
       socket.volatile.emit("player-position", {
         roomCode,
         userId: user.id,
@@ -1515,10 +1554,6 @@ export function createKitchenScene({ user, roomCode }) {
     // =====================================
 
     update(time, delta) {
-      // =================================
-      // MOVEMENT (chặn bởi quầy / đảo / lò trong tilemap)
-      // =================================
-
       let dx = (this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0);
       let dy = (this.keys.S.isDown ? 1 : 0) - (this.keys.W.isDown ? 1 : 0);
 
@@ -1550,21 +1585,13 @@ export function createKitchenScene({ user, roomCode }) {
       this.playerShadow.x = this.player.x;
       this.playerShadow.y = this.player.y + 8;
 
-      this.updateChefSprites(dx, dy, delta);
+      this.updateChefSprites(dx, dy);
 
       this.sendPosition();
-
-      // =================================
-      // TỰ SỬA heldItemId BỊ KẸT
-      // =================================
 
       if (this.heldItemId && !this.items[this.heldItemId]) {
         this.heldItemId = null;
       }
-
-      // =================================
-      // INTERACTION HINT
-      // =================================
 
       const heldItem = this.heldItemId ? this.items[this.heldItemId] : null;
 
@@ -1583,25 +1610,34 @@ export function createKitchenScene({ user, roomCode }) {
 
         hint.push({ key: "Q", label: `Drop ${heldItem.type}` });
 
-        // Hình item đang cầm trên đầu người chơi
-        const color = itemColor(heldItem.type, heldItem.status);
-
         if (!this.heldItemVisual) {
           this.heldItemVisual = this.add
-            .circle(this.player.x, this.player.y, 3, color)
-            .setStrokeStyle(1, 0x3b1a0a)
+            .image(this.player.x, this.player.y, "items", 0)
             .setDepth(6);
         }
 
+        this.heldItemVisual.setFrame(
+          itemFrame(heldItem.type, heldItem.status, heldItem.ingredients),
+        );
+
         const hold = heldItemOffset(this.facing, this.playerSprite.flipX);
 
-        this.heldItemVisual.setFillStyle(color);
         this.heldItemVisual.setDepth(hold.depth);
         this.heldItemVisual.x = this.player.x + hold.x;
         this.heldItemVisual.y = this.player.y + hold.y;
       } else if (this.heldItemVisual) {
         this.heldItemVisual.destroy();
         this.heldItemVisual = null;
+      }
+
+      if (this.ordersEl) {
+        const os = this.layout.stations.find(
+          (st) => st.kind === "order-station",
+        );
+
+        if (!os || this.distanceTo(os.x, os.y) > INTERACT_RANGE * 1.6) {
+          this.closeOrders();
+        }
       }
 
       this.updateStationViews();

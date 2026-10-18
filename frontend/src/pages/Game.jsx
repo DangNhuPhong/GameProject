@@ -6,7 +6,7 @@ import Phaser from "phaser";
 import { supabase } from "../lib/supabase";
 
 import { getMatch, getRecipes } from "../services/api";
-import { createKitchenScene } from "./KitchenScene";
+import { createKitchenScene } from "../game/KitchenScene";
 import { socket } from "../services/socket";
 
 import "./Game.css";
@@ -97,7 +97,11 @@ function Game() {
 
     let game;
 
-    const KitchenScene = createKitchenScene({ user, roomCode });
+    const KitchenScene = createKitchenScene({
+      user,
+      roomCode,
+      mapId: "bistro",
+    });
 
     // Canvas có kích thước đúng bằng số PIXEL VẬT LÝ của cửa sổ
     // (CSS px x devicePixelRatio), rồi thu lại bằng zoom = 1 / dpr.
@@ -117,7 +121,7 @@ function Game() {
     const { dpr, w, h } = getSize();
 
     const config = {
-      type: Phaser.CANVAS,
+      type: Phaser.AUTO,
 
       parent: gameRef.current,
 
