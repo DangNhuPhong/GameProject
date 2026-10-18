@@ -567,12 +567,12 @@
             {
               "name": "centerX",
               "type": "int",
-              "value": 8
+              "value": 228
             },
             {
               "name": "centerY",
               "type": "int",
-              "value": 8
+              "value": 48
             },
             {
               "name": "id",
@@ -601,12 +601,12 @@
             {
               "name": "centerX",
               "type": "int",
-              "value": 8
+              "value": 158
             },
             {
               "name": "centerY",
               "type": "int",
-              "value": 8
+              "value": 158
             },
             {
               "name": "id",
