@@ -4,98 +4,70 @@ import IngredientShelf from "./IngredientShelf.js";
 import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
 
+import { getMapLayout } from "../maps/index.js";
+
 // =====================================
-// LAYOUT  (khớp với KitchenScene: bản đồ 256 x 176)
+// LUẬT CỦA TỪNG LOẠI TRẠM (khoá theo "kind" trong Tiled)
 //
-//  Quầy tường (y = 24)
-//  Meat(32) → Grill(80) | Tomato(128) → Cutting(176) | Salad(224)
-//
-//  Đảo giữa phòng (y = 88)
-//  Bread(80) | Dough(128) | Plates(176)
+// Vị trí lấy từ map; thời gian có thể ghi đè bằng property
+// trong Tiled (cookTime, burnTime, cutTime).
+// Kind nào không có ở đây (oven, serving-counter...) sẽ bị bỏ qua.
 // =====================================
 
-const COUNTER_Y = 24;
-const ISLAND_Y = 88;
+const STATION_FACTORIES = {
+  grill: (s) =>
+    new CookingStation({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      cookTime: s.props.cookTime ?? 5000,
+      burnTime: s.props.burnTime ?? 10000,
+      acceptedTypes: ["meat"],
+    }),
+
+  "cutting-board": (s) =>
+    new CuttingStation({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      cutTime: s.props.cutTime ?? 2000,
+      acceptedTypes: ["tomato", "salad"],
+    }),
+};
 
 class GameRoom {
-  constructor(roomCode) {
+  constructor(roomCode, mapId = "kitchen") {
     this.roomCode = roomCode;
 
     this.items = [];
-
     this.nextItemId = 1;
 
-    // =====================================
-    // INGREDIENT SHELVES
-    // =====================================
+    // Layout lấy từ file map
+    const layout = getMapLayout(mapId);
 
-    this.shelves = [
-      new IngredientShelf({
-        id: "meat-shelf",
-        ingredientType: "meat",
-        x: 32,
-        y: COUNTER_Y,
-      }),
+    this.mapId = layout.id;
+    this.spawn = layout.spawn;
 
-      new IngredientShelf({
-        id: "tomato-shelf",
-        ingredientType: "tomato",
-        x: 128,
-        y: COUNTER_Y,
-      }),
+    // Kệ nguyên liệu
+    this.shelves = layout.shelves.map(
+      (s) =>
+        new IngredientShelf({
+          id: s.id,
+          ingredientType: s.ingredient,
+          x: s.x,
+          y: s.y,
+        }),
+    );
 
-      new IngredientShelf({
-        id: "salad-shelf",
-        ingredientType: "salad",
-        x: 224,
-        y: COUNTER_Y,
-      }),
+    // Bàn đĩa
+    const plate = layout.stations.find((s) => s.kind === "plate-station");
 
-      new IngredientShelf({
-        id: "bread-shelf",
-        ingredientType: "bread",
-        x: 80,
-        y: ISLAND_Y,
-      }),
+    this.plateStation = plate ? { id: plate.id, x: plate.x, y: plate.y } : null;
 
-      new IngredientShelf({
-        id: "dough-shelf",
-        ingredientType: "dough",
-        x: 128,
-        y: ISLAND_Y,
-      }),
-    ];
-
-    // =====================================
-    // WORKING STATIONS
-    // =====================================
-
-    this.plateStation = {
-      id: "plate-station",
-      x: 176,
-      y: ISLAND_Y,
-    };
-
-    this.stations = [
-      // GRILL
-      new CookingStation({
-        id: "grill",
-        x: 80,
-        y: COUNTER_Y,
-        cookTime: 5000,
-        burnTime: 10000,
-        acceptedTypes: ["meat"],
-      }),
-
-      // CUTTING BOARD
-      new CuttingStation({
-        id: "cutting-board",
-        x: 176,
-        y: COUNTER_Y,
-        cutTime: 2000,
-        acceptedTypes: ["tomato", "salad"],
-      }),
-    ];
+    // Trạm nấu / sơ chế
+    this.stations = layout.stations
+      .filter((s) => STATION_FACTORIES[s.kind])
+      .map((s) => STATION_FACTORIES[s.kind](s));
   }
 
   // =====================================
@@ -151,6 +123,11 @@ class GameRoom {
   // =====================================
 
   createPlate(userId) {
+    // Map không có bàn đĩa
+    if (!this.plateStation) {
+      return null;
+    }
+
     const plateId = `${this.roomCode}-plate-${this.nextItemId}`;
 
     this.nextItemId++;
@@ -272,6 +249,8 @@ class GameRoom {
   getState() {
     return {
       roomCode: this.roomCode,
+      mapId: this.mapId,
+      spawn: this.spawn,
 
       items: this.items.map((item) => item.serialize()),
 
@@ -284,11 +263,7 @@ class GameRoom {
 
       stations: this.stations.map((station) => station.getState()),
 
-      plateStation: {
-        id: this.plateStation.id,
-        x: this.plateStation.x,
-        y: this.plateStation.y,
-      },
+      plateStation: this.plateStation,
     };
   }
 }
