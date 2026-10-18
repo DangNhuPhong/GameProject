@@ -42,10 +42,26 @@ class GameRoom {
     this.items = [];
     this.nextItemId = 1;
 
+    this.orders = [];
+    this.nextOrderId = 1;
+    this.nextOrderAt = Date.now() + 12000;
+
     // Layout lấy từ file map
     const layout = getMapLayout(mapId);
 
     this.mapId = layout.id;
+
+    this.specialStations = layout.stations
+      .filter((s) =>
+        ["serving-counter", "trash-bin", "order-station"].includes(s.kind),
+      )
+      .map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        x: s.x,
+        y: s.y,
+      }));
+
     this.spawn = layout.spawn;
 
     // Kệ nguyên liệu
@@ -68,6 +84,133 @@ class GameRoom {
     this.stations = layout.stations
       .filter((s) => STATION_FACTORIES[s.kind])
       .map((s) => STATION_FACTORIES[s.kind](s));
+  }
+
+  createOrder() {
+    const choices = [
+      {
+        recipeId: "hamburger",
+        name: "Hamburger",
+        durationMs: 90000,
+      },
+      {
+        recipeId: "pizza",
+        name: "Pizza",
+        durationMs: 120000,
+      },
+      {
+        recipeId: "salad",
+        name: "Salad",
+        durationMs: 60000,
+      },
+    ];
+
+    const choice = choices[Math.floor(Math.random() * choices.length)];
+
+    const createdAt = Date.now();
+
+    const order = {
+      id: `${this.roomCode}-order-${this.nextOrderId++}`,
+      ...choice,
+      createdAt,
+      expiresAt: createdAt + choice.durationMs,
+      status: "waiting",
+    };
+
+    this.orders.push(order);
+    return order;
+  }
+
+  updateOrders(now = Date.now()) {
+    this.orders = this.orders.filter(
+      (order) => order.expiresAt > now && order.status === "waiting",
+    );
+
+    if (this.orders.length < 3 && now >= this.nextOrderAt) {
+      this.createOrder();
+      this.nextOrderAt = now + 12000;
+    }
+
+    return this.orders;
+  }
+
+  getOrders() {
+    this.updateOrders();
+
+    return this.orders.map((order) => ({
+      ...order,
+      remainingMs: Math.max(0, order.expiresAt - Date.now()),
+    }));
+  }
+
+  submitPlate(plate) {
+    if (!plate || plate.type !== "plate" || !Array.isArray(plate.ingredients)) {
+      return {
+        success: false,
+        message: "Hold a prepared plate to serve",
+      };
+    }
+
+    const ingredients = plate.ingredients;
+
+    const exactRecipe = (expected) =>
+      ingredients.length === expected.length &&
+      expected.every(([type, status]) =>
+        ingredients.some(
+          (i) => i.type === type && (!status || i.status === status),
+        ),
+      );
+
+    const recipes = [
+      {
+        id: "hamburger",
+        valid: () =>
+          exactRecipe([["bread"], ["meat", "cooked"], ["tomato", "chopped"]]),
+      },
+      {
+        id: "pizza",
+        valid: () => exactRecipe([["dough"], ["tomato", "chopped"]]),
+      },
+      {
+        id: "salad",
+        valid: () => exactRecipe([["salad", "chopped"]]),
+      },
+    ];
+
+    const recipe = recipes.find((r) => r.valid());
+
+    if (!recipe) {
+      return {
+        success: false,
+        message: "Recipe is incomplete or incorrect",
+      };
+    }
+
+    this.updateOrders();
+
+    const orderIndex = this.orders.findIndex(
+      (order) =>
+        order.recipeId === recipe.id &&
+        order.status === "waiting" &&
+        order.expiresAt > Date.now(),
+    );
+
+    if (orderIndex < 0) {
+      return {
+        success: false,
+        message: `No active ${recipe.id} order`,
+      };
+    }
+
+    const [completed] = this.orders.splice(orderIndex, 1);
+
+    this.removeItem(plate.id);
+
+    return {
+      success: true,
+      recipeId: recipe.id,
+      order: completed,
+    };
   }
 
   // =====================================

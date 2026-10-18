@@ -451,6 +451,119 @@ io.on("connection", (socket) => {
     });
   });
 
+  handle("use-trash-bin", ({ roomCode, userId, itemId, playerX, playerY }) => {
+    if (!roomCode || !userId || !itemId) return;
+
+    const code = String(roomCode).toUpperCase();
+    const gameRoom = getGameRoom(code);
+
+    if (!nearSpecialStation(gameRoom, "trash-bin", playerX, playerY)) {
+      socket.emit("interaction-error", {
+        message: "Too far from trash bin",
+      });
+      return;
+    }
+
+    const item = gameRoom.getItem(itemId);
+
+    if (!item || item.state !== "held" || item.userId !== userId) {
+      socket.emit("interaction-error", {
+        message: "You are not holding that item",
+      });
+      return;
+    }
+
+    gameRoom.removeItem(itemId);
+
+    io.to(code).emit("item-removed", { itemId, userId });
+  });
+
+  handle("request-orders", ({ roomCode, playerX, playerY }) => {
+    if (!roomCode) return;
+
+    const code = String(roomCode).toUpperCase();
+    const gameRoom = getGameRoom(code);
+
+    if (!nearSpecialStation(gameRoom, "order-station", playerX, playerY)) {
+      socket.emit("interaction-error", {
+        message: "Too far from order station",
+      });
+      return;
+    }
+
+    if (gameRoom.orders.length === 0) {
+      gameRoom.createOrder();
+      gameRoom.createOrder();
+      gameRoom.nextOrderAt = Date.now() + 12000;
+    }
+
+    io.to(code).emit("orders-updated", {
+      orders: gameRoom.getOrders(),
+    });
+  });
+
+  handle("serve-order", ({ roomCode, userId, itemId, playerX, playerY }) => {
+    if (!roomCode || !userId || !itemId) return;
+
+    const code = String(roomCode).toUpperCase();
+    const gameRoom = getGameRoom(code);
+
+    if (!nearSpecialStation(gameRoom, "serving-counter", playerX, playerY)) {
+      socket.emit("interaction-error", {
+        message: "Too far from serving counter",
+      });
+      return;
+    }
+
+    const plate = gameRoom.getItem(itemId);
+
+    if (
+      !plate ||
+      plate.type !== "plate" ||
+      plate.state !== "held" ||
+      plate.userId !== userId
+    ) {
+      socket.emit("interaction-error", {
+        message: "Hold a prepared plate to serve",
+      });
+      return;
+    }
+
+    const result = gameRoom.submitPlate(plate);
+
+    if (!result.success) {
+      socket.emit("interaction-error", {
+        message: result.message,
+      });
+      return;
+    }
+
+    io.to(code).emit("item-removed", {
+      itemId,
+      userId,
+    });
+
+    io.to(code).emit("order-completed", {
+      order: result.order,
+      recipeId: result.recipeId,
+      userId,
+    });
+
+    io.to(code).emit("orders-updated", {
+      orders: gameRoom.getOrders(),
+    });
+  });
+
+  function nearSpecialStation(gameRoom, stationId, x, y, range = 28) {
+    const station = gameRoom.specialStations.find((s) => s.id === stationId);
+
+    if (!station || typeof x !== "number" || typeof y !== "number") {
+      return false;
+    }
+
+    return Math.hypot(x - station.x, y - station.y) <= range;
+  }
+
   // ==========================================
   // PLACE ITEM ON STATION (Grill, Cutting...)
   // ==========================================
