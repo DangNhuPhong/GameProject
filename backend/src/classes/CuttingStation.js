@@ -68,6 +68,7 @@ class CuttingStation extends Station {
     this.progressMs = 0;
     this.lastTick = null;
     this.cuttingUserId = null;
+    this.cutAnchor = null;
   }
 
   // =====================================
@@ -91,7 +92,26 @@ class CuttingStation extends Station {
 
     this.cutState = "cutting";
     this.cuttingUserId = userId;
+    this.cutAnchor = { x: Math.round(playerX), y: Math.round(playerY) };
     this.lastTick = Date.now();
+
+    return true;
+  }
+
+  pauseCutting(userId, now = Date.now()) {
+    if (this.cutState !== "cutting" || this.cuttingUserId !== userId) {
+      return false;
+    }
+
+    this.progressMs = Math.min(
+      this.cutTime,
+      this.progressMs + (now - this.lastTick),
+    );
+
+    this.cutState = "paused";
+    this.lastTick = null;
+    this.cuttingUserId = null;
+    this.cutAnchor = null;
 
     return true;
   }

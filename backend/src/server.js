@@ -191,6 +191,33 @@ io.on("connection", (socket) => {
     // Lưu vị trí để server kiểm tra khoảng cách (thớt thái...)
     playerPositions.set(positionKey(normalizedRoomCode, userId), { x, y });
 
+    const room = gameRooms[normalizedRoomCode];
+
+    if (room) {
+      for (const station of room.stations) {
+        if (
+          station.type !== "cutting" ||
+          station.cutState !== "cutting" ||
+          station.cuttingUserId !== userId ||
+          !station.cutAnchor
+        ) {
+          continue;
+        }
+
+        const moved = Math.hypot(
+          x - station.cutAnchor.x,
+          y - station.cutAnchor.y,
+        );
+
+        if (moved > 1.5 && station.pauseCutting(userId)) {
+          io.to(normalizedRoomCode).emit("station-updated", {
+            station: station.getState(),
+            item: station.item ? station.item.serialize() : null,
+          });
+        }
+      }
+    }
+
     // volatile: gói cũ bị bỏ nếu client chưa kịp nhận, tránh dồn cục
     socket.to(normalizedRoomCode).volatile.emit("player-position", {
       userId,
