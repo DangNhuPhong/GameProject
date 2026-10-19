@@ -13,6 +13,7 @@ class Plate {
     // available / held
     this.state = "available";
     this.userId = null;
+    this.stationId = null;
   }
 
   // =====================================
@@ -44,6 +45,37 @@ class Plate {
 
     this.x = x;
     this.y = y;
+
+    return true;
+  }
+
+  // =====================================
+  // PLACE ON / TAKE FROM STATION (lò nướng...)
+  // =====================================
+
+  placeOnStation(stationId, x, y) {
+    if (this.state !== "held") {
+      return false;
+    }
+
+    this.state = "on-station";
+    this.stationId = stationId;
+    this.userId = null;
+
+    this.x = x;
+    this.y = y;
+
+    return true;
+  }
+
+  takeFromStation(userId) {
+    if (this.state !== "on-station") {
+      return false;
+    }
+
+    this.state = "held";
+    this.userId = userId;
+    this.stationId = null;
 
     return true;
   }
@@ -143,6 +175,7 @@ class Plate {
       y: this.y,
       state: this.state,
       userId: this.userId,
+      stationId: this.stationId,
       bakeStatus: this.bakeStatus,
       ingredients: this.ingredients.map((ingredient) => ({
         ...ingredient,
