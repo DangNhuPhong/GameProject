@@ -33,17 +33,31 @@ const io = new Server(server, {
 
 const gameRooms = {};
 
-// mapId chỉ có tác dụng ở lần tạo phòng đầu tiên (lúc có người join-room)
 function getGameRoom(roomCode, mapId) {
-  if (!gameRooms[roomCode]) {
+  let room = gameRooms[roomCode];
+
+  // Phòng tạo từ lobby với map mặc định, chưa chơi gì -> tạo lại đúng map
+  if (
+    room &&
+    mapId &&
+    room.mapId !== mapId &&
+    room.items.length === 0 &&
+    room.score === 0
+  ) {
+    console.log(`Recreating room ${roomCode}: ${room.mapId} -> ${mapId}`);
+    room = null;
+  }
+
+  if (!room) {
     if (!mapId)
       console.warn(`Room ${roomCode} created WITHOUT mapId -> default map`);
     console.log(
       `Creating new GameRoom: ${roomCode} (map: ${mapId || "default"})`,
     );
-    gameRooms[roomCode] = new GameRoom(roomCode, mapId || undefined);
+    room = gameRooms[roomCode] = new GameRoom(roomCode, mapId || undefined);
   }
-  return gameRooms[roomCode];
+
+  return room;
 }
 
 // ==========================================
