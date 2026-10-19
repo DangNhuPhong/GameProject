@@ -36,13 +36,13 @@ const gameRooms = {};
 // mapId chỉ có tác dụng ở lần tạo phòng đầu tiên (lúc có người join-room)
 function getGameRoom(roomCode, mapId) {
   if (!gameRooms[roomCode]) {
+    if (!mapId)
+      console.warn(`Room ${roomCode} created WITHOUT mapId -> default map`);
     console.log(
       `Creating new GameRoom: ${roomCode} (map: ${mapId || "default"})`,
     );
-
     gameRooms[roomCode] = new GameRoom(roomCode, mapId || undefined);
   }
-
   return gameRooms[roomCode];
 }
 

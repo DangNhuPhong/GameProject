@@ -24,3 +24,7 @@ export function getMapLayout(mapId) {
 
   return cache[id];
 }
+
+export function getMapFilePath(mapId) {
+  return MAP_FILES[mapId] ? path.join(dir, MAP_FILES[mapId]) : null;
+}

@@ -3,6 +3,7 @@ import cors from "cors";
 
 import recipeRoutes from "./routes/recipeRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
+import { getMapFilePath } from "./maps/index.js";
 
 const app = express();
 
@@ -46,6 +47,13 @@ app.use((err, req, res, next) => {
     success: false,
     message: "Internal server error",
   });
+});
+
+app.get("/api/maps/:id", (req, res) => {
+  const file = getMapFilePath(req.params.id);
+  if (!file) return res.sendStatus(404);
+  res.set("Cache-Control", "no-cache");
+  res.sendFile(file);
 });
 
 export default app;

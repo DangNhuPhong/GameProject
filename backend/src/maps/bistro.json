@@ -518,12 +518,10 @@
           "opacity": 1,
           "properties": [
             {
-              "name": "centerX",
               "type": "int",
               "value": 212
             },
             {
-              "name": "centerY",
               "type": "int",
               "value": 151
             },
@@ -599,12 +597,10 @@
           "opacity": 1,
           "properties": [
             {
-              "name": "centerX",
               "type": "int",
               "value": 158
             },
             {
-              "name": "centerY",
               "type": "int",
               "value": 158
             },
