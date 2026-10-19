@@ -865,6 +865,138 @@ io.on("connection", (socket) => {
   );
 
   // ==========================================
+  // ADD TO HELD PLATE (không cần đặt đĩa xuống)
+  // sourceType: "floor" | "station" | "shelf"
+  // ==========================================
+
+  handle(
+    "add-to-held-plate",
+    ({ roomCode, userId, plateId, sourceType, sourceId, playerX, playerY }) => {
+      if (
+        !roomCode ||
+        !userId ||
+        !plateId ||
+        !sourceType ||
+        !sourceId ||
+        typeof playerX !== "number" ||
+        typeof playerY !== "number"
+      ) {
+        return;
+      }
+
+      const code = String(roomCode).toUpperCase();
+
+      if (socket.data.roomCode !== code || socket.data.userId !== userId) {
+        return;
+      }
+
+      const gameRoom = getGameRoom(code);
+      const fail = (message) => socket.emit("interaction-error", { message });
+      const RANGE = 30; // client dùng 20, chừa dung sai
+
+      const plate = gameRoom.getItem(plateId);
+
+      if (
+        !plate ||
+        plate.type !== "plate" ||
+        plate.state !== "held" ||
+        plate.userId !== userId
+      ) {
+        return fail("You are not holding that plate");
+      }
+
+      if ((plate.bakeStatus ?? "raw") !== "raw") {
+        return fail("This plate has already been baked");
+      }
+
+      let item = null;
+      let changedStation = null;
+
+      if (sourceType === "floor") {
+        item = gameRoom.getItem(sourceId);
+
+        if (!item || item.type === "plate" || item.state !== "available") {
+          return fail("Ingredient not available");
+        }
+
+        if (Math.hypot(playerX - item.x, playerY - item.y) > RANGE) {
+          return fail("Too far from ingredient");
+        }
+
+        if (!plate.canAcceptIngredient(item)) {
+          return fail("Cannot add this ingredient to the plate");
+        }
+      } else if (sourceType === "station") {
+        const station = gameRoom.getStation(sourceId);
+        const onStation = station?.item;
+
+        if (!station || !onStation || onStation.type === "plate") {
+          return fail("Nothing to take from this station");
+        }
+
+        if (Math.hypot(playerX - station.x, playerY - station.y) > RANGE) {
+          return fail("Too far from station");
+        }
+
+        if (!["chopped", "cooked"].includes(onStation.status)) {
+          return fail("This ingredient is not ready yet");
+        }
+
+        if (!plate.canAcceptIngredient(onStation)) {
+          return fail("Cannot add this ingredient to the plate");
+        }
+
+        item = station.takeItem(userId); // item chuyển sang "held" bởi userId
+
+        if (!item) return fail("Cannot take item from station");
+
+        changedStation = station;
+      } else if (sourceType === "shelf") {
+        const shelf = gameRoom.getShelf(sourceId);
+
+        if (!shelf) return fail("Shelf not found");
+
+        if (Math.hypot(playerX - shelf.x, playerY - shelf.y) > RANGE) {
+          return fail("Too far from shelf");
+        }
+
+        item = gameRoom.createItemFromShelf(sourceId, userId);
+
+        if (!item) return fail("Cannot take ingredient");
+      } else {
+        return;
+      }
+
+      if (!plate.addIngredient(item)) {
+        // Hiếm khi tới đây (đã kiểm tra trước): trả item về trạng thái hợp lệ
+        if (sourceType !== "floor") {
+          item.state = "available";
+          item.userId = null;
+        }
+
+        return fail("Cannot add this ingredient to the plate");
+      }
+
+      // Nguyên liệu giờ nằm trong đĩa, xóa item riêng khỏi phòng
+      gameRoom.removeItem(item.id);
+
+      if (changedStation) {
+        io.to(code).emit("station-updated", {
+          station: changedStation.getState(),
+          item: null,
+        });
+      }
+
+      io.to(code).emit("item-removed", { itemId: item.id, userId });
+
+      // Gửi đĩa với danh sách nguyên liệu mới (client xử lý "plate-picked")
+      io.to(code).emit("plate-picked", { item: plate.serialize() });
+
+      console.log(`${userId} added ${item.type} (${sourceType}) to held plate`);
+    },
+  );
+
+  // ==========================================
   // DISCONNECT
   // ==========================================
 
