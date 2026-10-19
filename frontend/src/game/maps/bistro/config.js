@@ -1,6 +1,7 @@
-import mapUrl from "./bistro.json?url";
 import collisionUrl from "./collision-tiles.png";
 import bgUrl from "./bistro-bg.png";
+
+const mapUrl = `${import.meta.env.VITE_API_URL}/api/maps/bistro`;
 
 export default {
   id: "bistro",

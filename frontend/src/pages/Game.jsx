@@ -171,31 +171,33 @@ function Game() {
     return () => {
       window.removeEventListener("resize", onResize);
 
-      socket.off("game-state");
+      [
+        "game-state",
+        "item-created",
+        "item-picked",
+        "item-dropped",
+        "plate-created",
+        "plate-picked",
+        "plate-dropped",
+        "station-updated",
+        "player-position",
+        "player-joined",
+        "player-left",
+        "orders-updated",
+        "orders-list",
+        "item-removed",
+        "order-completed",
+        "interaction-error",
+        "disconnect",
+      ].forEach((ev) => socket.off(ev));
 
-      socket.off("item-created");
-
-      socket.off("item-picked");
-
-      socket.off("item-dropped");
-
-      socket.off("plate-created");
-
-      socket.off("plate-picked");
-
-      socket.off("plate-dropped");
-
-      socket.off("station-updated");
-
-      socket.off("player-position");
-
-      socket.off("player-joined");
+      document
+        .querySelectorAll("[data-orders-panel]")
+        .forEach((n) => n.remove());
 
       socket.disconnect();
 
-      if (game) {
-        game.destroy(true);
-      }
+      if (game) game.destroy(true);
     };
   }, [loading, user, match, roomCode]);
 

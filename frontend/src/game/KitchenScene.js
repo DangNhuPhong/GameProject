@@ -61,6 +61,13 @@ function itemFrame(type, status, ingredients = []) {
   return ITEM_FRAMES[`${type}:${status}`] ?? ITEM_FRAMES[`${type}:raw`] ?? 0;
 }
 
+// Đĩa pizza: chín = vàng, cháy = xám đen
+function applyBakeTint(sprite, bakeStatus) {
+  if (bakeStatus === "cooked") sprite.setTint(0xffd27a);
+  else if (bakeStatus === "burnt") sprite.setTint(0x555555);
+  else sprite.clearTint();
+}
+
 // =====================================
 // NHÂN VẬT PIXEL (spritesheet 4 cột x 3 hàng, mỗi khung 16 x 20)
 // =====================================
@@ -357,15 +364,16 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         this.socketHandlers.push([eventName, handler]);
       };
 
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      const cleanupSocket = () => {
         this.socketHandlers.forEach(([eventName, handler]) => {
           socket.off(eventName, handler);
         });
-
         this.socketHandlers = [];
-
         this.closeOrders();
-      });
+      };
+
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupSocket);
+      this.events.once(Phaser.Scenes.Events.DESTROY, cleanupSocket);
 
       on("game-state", (state) => {
         if (!state) return;
@@ -584,6 +592,11 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       }
 
       item.sprite.setFrame(itemFrame(item.type, item.status, item.ingredients));
+
+      if (item.type === "plate") {
+        item.bakeStatus = itemData.bakeStatus || "raw";
+        applyBakeTint(item.sprite, item.bakeStatus);
+      }
 
       if (item.state === "held") {
         item.sprite.setVisible(false);
@@ -953,7 +966,12 @@ export function createKitchenScene({ user, roomCode, mapId }) {
 
     openOrders() {
       if (!this.ordersEl) {
+        document
+          .querySelectorAll("[data-orders-panel]")
+          .forEach((n) => n.remove());
+
         const el = document.createElement("div");
+        el.dataset.ordersPanel = "1";
 
         el.style.cssText =
           "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;" +
@@ -1012,7 +1030,7 @@ export function createKitchenScene({ user, roomCode, mapId }) {
 
       const RECIPE_HINT = {
         hamburger: "Bread + cooked meat + chopped tomato",
-        pizza: "Dough + chopped tomato",
+        pizza: "Dough + chopped tomato on a plate, then bake in the oven",
         salad: "Chopped salad",
       };
 
@@ -1074,6 +1092,9 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         this.ordersEl.remove();
         this.ordersEl = null;
       }
+      document
+        .querySelectorAll("[data-orders-panel]")
+        .forEach((n) => n.remove());
     }
 
     // Thông báo ngắn giữa phía trên màn hình (phục vụ xong, lỗi...)
@@ -1179,6 +1200,14 @@ export function createKitchenScene({ user, roomCode, mapId }) {
           if (station && station.itemId) continue;
           if (!cfg.accepts(held)) continue;
 
+          // Lò chỉ nhận đĩa chưa nướng: đĩa đã chín / cháy không được bỏ vào lại
+          if (
+            cfg.kind === "oven" &&
+            (held.type !== "plate" || (held.bakeStatus || "raw") !== "raw")
+          ) {
+            continue;
+          }
+
           const d = this.distanceTo(cfg.x, cfg.y);
 
           if (d > INTERACT_RANGE) continue;
@@ -1190,6 +1219,58 @@ export function createKitchenScene({ user, roomCode, mapId }) {
               run: () => this.placeOnStation(cfg.id),
             };
           }
+        }
+
+        // Đang cầm đĩa (chưa nướng): thêm thẳng nguyên liệu gần đó vào đĩa,
+        // không cần đặt đĩa xuống
+        if (held.type === "plate" && (held.bakeStatus || "raw") === "raw") {
+          const offer = (d, label, source) => {
+            if (d > INTERACT_RANGE) return;
+
+            if (!best || d < best.d) {
+              best = {
+                d,
+                label,
+                run: () => this.addToHeldPlate(source),
+              };
+            }
+          };
+
+          // 1) Nguyên liệu nằm dưới đất
+          Object.values(this.items).forEach((item) => {
+            if (item.type === "plate" || item.state !== "available") return;
+
+            offer(
+              this.distanceTo(item.x, item.y),
+              `Add ${item.status !== "raw" ? item.status + " " : ""}${item.type} to plate`,
+              { type: "floor", id: item.id },
+            );
+          });
+
+          // 2) Đồ đã xong trên trạm (cà chua đã thái, thịt đã chín)
+          this.stationDefs.forEach((cfg) => {
+            const station = this.stations[cfg.id];
+            const item =
+              station && station.itemId && this.items[station.itemId];
+
+            if (!item || item.type === "plate") return;
+            if (!["chopped", "cooked"].includes(item.status)) return;
+
+            offer(
+              this.distanceTo(cfg.x, cfg.y),
+              `Add ${item.status} ${item.type} to plate`,
+              { type: "station", id: cfg.id },
+            );
+          });
+
+          // 3) Lấy thẳng từ kệ nguyên liệu bỏ vào đĩa
+          this.layout.shelves.forEach((shelf) => {
+            offer(
+              this.distanceTo(shelf.x, shelf.y),
+              `Add ${shelf.type} to plate`,
+              { type: "shelf", id: shelf.id },
+            );
+          });
         }
 
         if (held.type !== "plate") {
@@ -1253,16 +1334,22 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         );
       });
 
+      const takeLabel = (item) => {
+        if (item.type !== "plate") return `Take ${item.status} ${item.type}`;
+
+        if (item.bakeStatus === "cooked") return "Take baked pizza";
+        if (item.bakeStatus === "burnt") return "Take burnt pizza";
+        return "Take pizza (still baking)";
+      };
+
       this.stationDefs.forEach((cfg) => {
         const station = this.stations[cfg.id];
         const item = station && station.itemId && this.items[station.itemId];
 
         if (!item) return;
 
-        consider(
-          this.distanceTo(cfg.x, cfg.y),
-          `Take ${item.status} ${item.type}`,
-          () => this.takeFromStation(cfg.id),
+        consider(this.distanceTo(cfg.x, cfg.y), takeLabel(item), () =>
+          this.takeFromStation(cfg.id),
         );
       });
 
@@ -1283,6 +1370,12 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       return best;
     }
     handleInteract() {
+      // Bảng order đang mở: E luôn đóng được, không phụ thuộc khoảng cách
+      if (this.ordersEl) {
+        this.closeOrders();
+        return;
+      }
+
       const action = this.findInteraction();
 
       console.log(
@@ -1362,6 +1455,23 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       });
     }
 
+    // Người chơi nhích đi -> thanh thái đứng ngay (server cũng pause ngay)
+    freezeMyCutting() {
+      for (const cfg of this.stationDefs) {
+        if (!cfg.chop) continue;
+
+        const st = this.stations[cfg.id];
+
+        if (!st || st.cutState !== "cutting" || st.cuttingUserId !== user.id) {
+          continue;
+        }
+
+        st.elapsedMs += Date.now() - st.receivedAt;
+        st.receivedAt = Date.now();
+        st.cutState = "paused";
+      }
+    }
+
     startCutting(stationId) {
       if (this.heldItemId) return;
 
@@ -1387,6 +1497,29 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         userId: user.id,
         plateId,
         itemId: this.heldItemId,
+        playerX: this.player.x,
+        playerY: this.player.y,
+      });
+    }
+
+    // Thêm nguyên liệu (dưới đất / trên trạm / ở kệ) vào đĩa đang cầm
+    addToHeldPlate(source) {
+      if (!this.heldItemId || this.pendingPlateAdd) return;
+
+      const plate = this.items[this.heldItemId];
+      if (!plate || plate.type !== "plate") return;
+
+      this.pendingPlateAdd = true;
+      this.time.delayedCall(400, () => {
+        this.pendingPlateAdd = false;
+      });
+
+      socket.emit("add-to-held-plate", {
+        roomCode,
+        userId: user.id,
+        plateId: this.heldItemId,
+        sourceType: source.type,
+        sourceId: source.id,
         playerX: this.player.x,
         playerY: this.player.y,
       });
@@ -1564,6 +1697,9 @@ export function createKitchenScene({ user, roomCode, mapId }) {
 
       const step = PLAYER_SPEED * (delta / 1000);
 
+      const beforeX = this.player.x;
+      const beforeY = this.player.y;
+
       const nextX = this.player.x + dx * step;
 
       if (
@@ -1580,6 +1716,10 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         !this.blockedByOtherPlayer(this.player.x, nextY)
       ) {
         this.player.y = nextY;
+      }
+
+      if (this.player.x !== beforeX || this.player.y !== beforeY) {
+        this.freezeMyCutting();
       }
 
       this.playerShadow.x = this.player.x;
@@ -1619,6 +1759,12 @@ export function createKitchenScene({ user, roomCode, mapId }) {
         this.heldItemVisual.setFrame(
           itemFrame(heldItem.type, heldItem.status, heldItem.ingredients),
         );
+
+        if (heldItem.type === "plate") {
+          applyBakeTint(this.heldItemVisual, heldItem.bakeStatus);
+        } else {
+          this.heldItemVisual.clearTint();
+        }
 
         const hold = heldItemOffset(this.facing, this.playerSprite.flipX);
 
