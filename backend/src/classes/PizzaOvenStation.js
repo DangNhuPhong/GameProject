@@ -1,139 +1,100 @@
 import Station from "./Station.js";
 
+const normalize = (list) =>
+  (list || []).map((i) =>
+    typeof i === "string"
+      ? { type: i, status: "raw" }
+      : { type: i.type ?? i.ingredientType, status: i.status ?? "raw" },
+  );
+
+// Đĩa có đúng bột + cà chua đã thái
+export function isPizzaPlate(plate) {
+  if (!plate || plate.type !== "plate") return false;
+
+  const ing = normalize(plate.ingredients);
+
+  return (
+    ing.length === 2 &&
+    ing.some((i) => i.type === "dough") &&
+    ing.some((i) => i.type === "tomato" && i.status === "chopped")
+  );
+}
+
 class PizzaOvenStation extends Station {
   constructor({
-    id = "pizza-oven",
+    id,
     x = 0,
     y = 0,
-    range = 90,
-    cookingTime = 10000,
+    bakeTime = 8000,
+    burnTime = 10000,
+    range = 50,
   }) {
-    super({
-      id,
-      type: "pizza-oven",
-      x,
-      y,
-      range,
-    });
+    super({ id, type: "oven", x, y, range });
 
-    this.cookingTime = cookingTime;
-    this.cookingStartedAt = null;
-    this.status = "EMPTY";
+    this.bakeTime = bakeTime;
+    this.burnTime = burnTime;
+    this.progressMs = 0;
+    this.lastTick = null;
   }
 
-  // Chỉ nhận đĩa có đủ nguyên liệu pizza
-  canAccept(plate) {
-    if (!plate || this.item || this.status !== "EMPTY") {
-      return false;
-    }
-
-    // Plate phải có mảng ingredients
-    if (!Array.isArray(plate.ingredients)) {
-      return false;
-    }
-
-    const ingredientTypes = plate.ingredients.map((ingredient) =>
-      String(ingredient.type || "").toLowerCase(),
-    );
-
-    const hasDough =
-      ingredientTypes.includes("dough") || ingredientTypes.includes("flour");
-
-    const hasTomato =
-      ingredientTypes.includes("tomato") ||
-      ingredientTypes.includes("chopped-tomato");
-
-    const hasSalad = ingredientTypes.includes("salad");
-
-    return hasDough && hasTomato && hasSalad;
+  canAccept(item) {
+    return super.canAccept(item) && isPizzaPlate(item);
   }
 
-  // Đặt cả đĩa lên lò, không đặt từng nguyên liệu riêng
-  placeItem(plate) {
-    if (!this.canAccept(plate)) {
-      return false;
-    }
+  // Đặt đĩa vào là tự nướng (tiếp tục từ trạng thái hiện tại của đĩa)
+  onItemPlaced() {
+    const s = this.item?.bakeStatus ?? "raw";
 
-    this.item = plate;
-
-    // Đưa đĩa về vị trí lò
-    plate.x = this.x;
-    plate.y = this.y;
-
-    // Bắt đầu nướng
-    this.status = "COOKING";
-    this.cookingStartedAt = Date.now();
-
-    this.onItemPlaced(plate);
-
-    return true;
+    this.progressMs =
+      s === "burnt"
+        ? this.bakeTime + this.burnTime
+        : s === "cooked"
+          ? this.bakeTime
+          : 0;
+    this.lastTick = Date.now();
   }
 
-  // Cập nhật trạng thái nướng
-  update() {
-    if (this.status !== "COOKING" || !this.item) {
-      return false;
-    }
-
-    const elapsed = Date.now() - this.cookingStartedAt;
-
-    if (elapsed < this.cookingTime) {
-      return false;
-    }
-
-    this.status = "READY";
-    this.cookingStartedAt = null;
-
-    // Đánh dấu đĩa đã nướng xong
-    this.item.status = "baked";
-
-    this.onCookingFinished(this.item);
-
-    return true;
+  onItemTaken() {
+    this.progressMs = 0;
+    this.lastTick = null;
   }
 
-  // Chỉ lấy đĩa ra sau khi nướng xong
-  takeItem(userId) {
-    if (!this.item || this.status !== "READY") {
-      return null;
+  // Trả về true khi trạng thái đĩa đổi (raw -> cooked -> burnt)
+  update(now = Date.now()) {
+    if (!this.item || this.lastTick === null) return false;
+
+    this.progressMs += now - this.lastTick;
+    this.lastTick = now;
+
+    const status =
+      this.progressMs >= this.bakeTime + this.burnTime
+        ? "burnt"
+        : this.progressMs >= this.bakeTime
+          ? "cooked"
+          : "raw";
+
+    if (status !== this.item.bakeStatus) {
+      this.item.bakeStatus = status;
+      return true;
     }
 
-    const plate = this.item;
-
-    this.item = null;
-    this.status = "EMPTY";
-
-    // Chuyển quyền giữ đĩa cho người chơi
-    plate.userId = userId;
-
-    this.onItemTaken(plate);
-
-    return plate;
-  }
-
-  getProgress() {
-    if (this.status !== "COOKING" || !this.cookingStartedAt) {
-      return this.status === "READY" ? 100 : 0;
-    }
-
-    const elapsed = Date.now() - this.cookingStartedAt;
-
-    return Math.min(100, Math.floor((elapsed / this.cookingTime) * 100));
+    return false;
   }
 
   getState() {
+    let elapsedMs = this.progressMs;
+
+    if (this.item && this.lastTick !== null) {
+      elapsedMs += Date.now() - this.lastTick;
+    }
+
     return {
       ...super.getState(),
-      status: this.status,
-      progress: this.getProgress(),
-      cookingTime: this.cookingTime,
-      itemId: this.item ? this.item.id : null,
+      cookTime: this.bakeTime,
+      burnTime: this.burnTime,
+      elapsedMs,
+      cutState: null,
     };
-  }
-
-  onCookingFinished(plate) {
-    // GameRoom có thể dùng hook này để phát sự kiện
-    // pizza-ready cho client.
   }
 }
 

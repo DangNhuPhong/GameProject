@@ -2,6 +2,7 @@ class Plate {
   constructor({ id, x = 0, y = 0 }) {
     this.id = id;
     this.type = "plate";
+    this.bakeStatus = "raw";
 
     this.x = x;
     this.y = y;
@@ -142,6 +143,7 @@ class Plate {
       y: this.y,
       state: this.state,
       userId: this.userId,
+      bakeStatus: this.bakeStatus,
       ingredients: this.ingredients.map((ingredient) => ({
         ...ingredient,
       })),

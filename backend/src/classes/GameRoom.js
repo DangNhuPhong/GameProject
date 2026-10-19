@@ -3,6 +3,7 @@ import Plate from "./Plate.js";
 import IngredientShelf from "./IngredientShelf.js";
 import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
+import PizzaOvenStation from "./PizzaOvenStation.js";
 
 import { getMapLayout } from "../maps/index.js";
 
@@ -32,6 +33,15 @@ const STATION_FACTORIES = {
       y: s.y,
       cutTime: s.props.cutTime ?? 2000,
       acceptedTypes: ["tomato", "salad"],
+    }),
+
+  oven: (s) =>
+    new PizzaOvenStation({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      bakeTime: s.props.bakeTime ?? 8000,
+      burnTime: s.props.burnTime ?? 10000,
     }),
 };
 
@@ -174,6 +184,19 @@ class GameRoom {
           (i) => i.type === type && (!status || i.status === status),
         ),
       );
+
+    if (
+      exactRecipe([["dough"], ["tomato", "chopped"]]) &&
+      plate.bakeStatus !== "cooked"
+    ) {
+      return {
+        success: false,
+        message:
+          plate.bakeStatus === "burnt"
+            ? "The pizza is burnt!"
+            : "Bake the pizza in the oven first",
+      };
+    }
 
     const recipes = [
       {
