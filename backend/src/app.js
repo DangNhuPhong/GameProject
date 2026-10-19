@@ -29,10 +29,18 @@ app.get("/api/test-db", async (req, res) => {
   });
 });
 
+app.get("/api/maps/:id", (req, res) => {
+  const file = getMapFilePath(req.params.id);
+  if (!file) return res.sendStatus(404);
+  res.set("Cache-Control", "no-cache");
+  res.sendFile(file);
+});
+
 app.use("/api/recipes", recipeRoutes);
 
 app.use("/api/matches", matchRoutes);
 
+// 404 và error handler phải luôn nằm cuối cùng
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -47,13 +55,6 @@ app.use((err, req, res, next) => {
     success: false,
     message: "Internal server error",
   });
-});
-
-app.get("/api/maps/:id", (req, res) => {
-  const file = getMapFilePath(req.params.id);
-  if (!file) return res.sendStatus(404);
-  res.set("Cache-Control", "no-cache");
-  res.sendFile(file);
 });
 
 export default app;
