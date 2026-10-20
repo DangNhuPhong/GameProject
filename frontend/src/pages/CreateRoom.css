@@ -1,0 +1,13 @@
+.home-landing {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 24px 16px 40px;
+  /* Đặt ảnh tại: public/landing-bg.png (hoặc đổi đường dẫn cho khớp) */
+  background: #2a1a10 url("../assets/landing-bg.png") center / cover no-repeat;
+  overflow: hidden;
+}

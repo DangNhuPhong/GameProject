@@ -397,8 +397,6 @@ function Lobby() {
   return (
     <div className="lobby-page">
       <div className="lobby-card">
-        <h1>Kitchen Panic</h1>
-
         <h2>Room: {roomCode}</h2>
 
         <p>
@@ -421,7 +419,7 @@ function Lobby() {
               <span>
                 {player.profiles?.username || "Unknown User"}
 
-                {player.user_id === match.host_id && " 👑"}
+                {player.user_id === match.host_id && " (Host)"}
               </span>
 
               <span className={player.ready ? "ready" : "not-ready"}>

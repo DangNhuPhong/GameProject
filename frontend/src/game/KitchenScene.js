@@ -17,6 +17,7 @@ const FEET_BOTTOM = 9; // = CHEF_FOOT_OFFSET
 const PLAYER_SPEED = 75;
 
 const ZOOM_STORAGE_KEY = "kitchen-zoom-mode";
+const NEAR_ZOOM_SCALE = 0.6;
 
 function loadZoomMode() {
   try {
@@ -659,7 +660,7 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       }
 
       // near: sát nhân vật, không bao giờ xa hơn mức far
-      return Math.max(fitZoom, gw / this.mapCfg.zoomNear);
+      return Math.max(fitZoom, gw / this.mapCfg.zoomNear) * NEAR_ZOOM_SCALE;
     }
 
     setZoomMode(mode) {

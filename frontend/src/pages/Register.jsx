@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import "./Login.css";
 
 function Register() {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ function Register() {
   };
 
   return (
-    <div className="page-container">
+    <div className="home-landing">
       <div className="page-card">
         <h1>Register</h1>
 

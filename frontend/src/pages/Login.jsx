@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ function Login() {
   };
 
   return (
-    <div className="page-container">
+    <div className="home-landing">
       <div className="page-card">
         <h1>Login</h1>
 

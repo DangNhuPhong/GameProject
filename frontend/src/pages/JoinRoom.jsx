@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { API_URL } from "../services/config";
+import "./JoinRoom.css";
+
 function JoinRoom() {
   const navigate = useNavigate();
 
@@ -55,7 +57,7 @@ function JoinRoom() {
   };
 
   return (
-    <div className="page-container">
+    <div className="home-landing">
       <div className="page-card">
         <h1>Join Room</h1>
 

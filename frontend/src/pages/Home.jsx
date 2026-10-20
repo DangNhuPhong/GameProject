@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import "./Home.css";
 
 function Home() {
   const navigate = useNavigate();
-
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
@@ -37,37 +37,51 @@ function Home() {
     navigate("/login");
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(console.error);
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
-    <div className="page-container">
-      <div className="page-card home-card">
-        <h1>OverNấuĂn</h1>
+    <div className="home-landing">
+      {/* Tên game đã có trong ảnh nền nên ẩn h1 (vẫn giữ cho SEO/screen reader) */}
+      <h1 className="sr-only">OverNấuĂn</h1>
 
-        {profile && (
-          <div className="profile-info">
-            <h2>Welcome, {profile.username}!</h2>
-
-            <p>
-              Level: <strong>{profile.level}</strong>
-            </p>
-
-            <p>
-              Coins: <strong>{profile.coins}</strong>
-            </p>
-          </div>
-        )}
-
-        <div className="home-actions">
-          <button onClick={() => navigate("/createroom")}>Create Room</button>
-
-          <button onClick={() => navigate("/joinroom")}>Join Room</button>
-
-          <button onClick={() => navigate("/recipes")}>Recipes</button>
-
-          <button className="logout-button" onClick={logout}>
-            Logout
-          </button>
+      {profile && (
+        <div className="glass glass-profile">
+          <span className="glass-profile-name">{profile.username}</span>
+          <span>Lv. {profile.level}</span>
+          <span>🪙 {profile.coins}</span>
         </div>
-      </div>
+      )}
+
+      <nav className="home-actions-glass">
+        <button
+          className="glass glass-btn"
+          onClick={() => navigate("/createroom")}
+        >
+          Create Room
+        </button>
+        <button
+          className="glass glass-btn"
+          onClick={() => navigate("/joinroom")}
+        >
+          Join Room
+        </button>
+        <button className="glass glass-btn glass-danger" onClick={logout}>
+          Logout
+        </button>
+        <button
+          className="glass glass-btn glass-fullscreen"
+          onClick={toggleFullscreen}
+          aria-label="Toàn màn hình"
+        >
+          ⛶
+        </button>
+      </nav>
     </div>
   );
 }

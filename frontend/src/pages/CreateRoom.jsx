@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { createMatch } from "../services/api";
+import "./CreateRoom.css";
 
 function CreateRoom() {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ function CreateRoom() {
   };
 
   return (
-    <div className="page">
+    <div className="home-landing">
       <h1>Create Room</h1>
 
       <div>
