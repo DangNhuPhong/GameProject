@@ -157,7 +157,7 @@ function createPixelTextures(scene) {
 // =====================================
 
 /** Creates the Phaser scene with the current player, room and map. */
-export function createKitchenScene({ user, roomCode, mapId, onLeave }) {
+export function createKitchenScene({ user, roomCode, mapId, ui }) {
   const mapCfg = getMapConfig(mapId);
 
   return class KitchenScene extends Phaser.Scene {
@@ -252,7 +252,7 @@ export function createKitchenScene({ user, roomCode, mapId, onLeave }) {
 
       this.input.keyboard.on("keydown-ESC", () => {
         if (this.ordersEl) this.closeOrders();
-        else this.controls?.toggleMenu();
+        else ui?.toggleMenu();
       });
 
       // Ảnh nền nguyên bản (nếu map có)
@@ -313,7 +313,8 @@ export function createKitchenScene({ user, roomCode, mapId, onLeave }) {
         onDrop: () => this.dropItem(),
         onZoom: () =>
           this.setZoomMode(this.zoomMode === "near" ? "far" : "near"),
-        onLeave,
+        getMode: ui.getMode,
+        isMenuOpen: ui.isMenuOpen,
         onModeChange: () => this.applyControlMode(),
       });
       this.applyControlMode();
@@ -1709,6 +1710,8 @@ export function createKitchenScene({ user, roomCode, mapId, onLeave }) {
     // =====================================
 
     update(time, delta) {
+      this.controls.sync();
+
       const stick = this.controls.getVector();
 
       let dx = (this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0);

@@ -1,6 +1,6 @@
 .fs-btn {
   position: fixed;
-  right: max(10px, env(safe-area-inset-right));
+  left: max(10px, env(safe-area-inset-right));
   bottom: max(10px, env(safe-area-inset-bottom));
   z-index: 100;
 
