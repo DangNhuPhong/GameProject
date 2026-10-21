@@ -1,0 +1,280 @@
+/* ===== Nền landing ===== */
+.lp-root {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end; /* nút Play nằm sát đáy màn hình */
+  padding: 24px 16px clamp(32px, 9vh, 96px);
+  box-sizing: border-box;
+  background: #2a1a10 url("../assets/landing-bg.png") center / cover no-repeat;
+  overflow: hidden;
+}
+
+.lp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ===== Liquid glass (dùng chung) ===== */
+.lp-glass {
+  position: relative;
+  isolation: isolate;
+  color: #fff;
+  font-weight: 700;
+  font-family: inherit;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.08)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(14px) saturate(180%) brightness(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(180%) brightness(1.08);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.75),
+    inset 0 -2px 6px rgba(255, 255, 255, 0.15),
+    inset 0 0 22px rgba(255, 255, 255, 0.12),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* vệt sáng phản chiếu (specular highlight) */
+.lp-glass::before {
+  content: "";
+  position: absolute;
+  inset: 2px 8% auto 8%;
+  height: 45%;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0)
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ===== Nút Play ===== */
+.lp-play {
+  padding: 22px 80px;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  cursor: pointer;
+  animation: lp-play-glow 2.4s ease-in-out infinite;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s;
+}
+
+.lp-play:hover {
+  transform: translateY(-4px) scale(1.06);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.42),
+    rgba(255, 255, 255, 0.16)
+  );
+}
+
+.lp-play:active {
+  transform: scale(0.97);
+}
+
+.lp-play:focus-visible,
+.lp-btn:focus-visible,
+.lp-menu-trigger:focus-visible,
+.lp-menu-item:focus-visible {
+  outline: 3px solid #ffd54a;
+  outline-offset: 3px;
+}
+
+@keyframes lp-play-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.75),
+      inset 0 -2px 6px rgba(255, 255, 255, 0.15),
+      inset 0 0 22px rgba(255, 255, 255, 0.12),
+      0 10px 30px rgba(0, 0, 0, 0.35),
+      0 0 0 0 rgba(255, 213, 74, 0.45);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.75),
+      inset 0 -2px 6px rgba(255, 255, 255, 0.15),
+      inset 0 0 22px rgba(255, 255, 255, 0.12),
+      0 10px 30px rgba(0, 0, 0, 0.35),
+      0 0 0 14px rgba(255, 213, 74, 0);
+  }
+}
+
+/* ===== Menu góc trên phải ===== */
+.lp-menu-wrap {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.lp-menu-trigger {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  font-size: 1.25rem;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s;
+}
+
+.lp-menu-trigger:hover {
+  transform: scale(1.08);
+}
+
+.lp-menu-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 24px;
+  transform-origin: top right;
+  animation: lp-menu-in 0.18s ease-out;
+}
+
+@keyframes lp-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.lp-menu-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.lp-menu-user-name {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.lp-menu-user-stats {
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.lp-menu-item {
+  width: 100%;
+  padding: 11px 14px;
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  background: transparent;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.lp-menu-item:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lp-menu-item-danger:hover {
+  background: rgba(255, 90, 80, 0.4);
+}
+
+/* ===== About us ===== */
+.lp-about-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.lp-about-card {
+  width: min(100%, 440px);
+  padding: 28px 28px 24px;
+  border-radius: 28px;
+  text-align: center;
+}
+
+.lp-about-card h2 {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+}
+
+.lp-about-card p {
+  margin: 0 0 20px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.lp-btn {
+  padding: 12px 36px;
+  font-size: 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s;
+}
+
+.lp-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 520px) {
+  .lp-play {
+    padding: 18px 56px;
+  }
+  .lp-menu-wrap {
+    top: 12px;
+    right: 12px;
+  }
+  .lp-menu-trigger {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-play,
+  .lp-menu-panel {
+    animation: none;
+  }
+  .lp-play,
+  .lp-btn,
+  .lp-menu-trigger {
+    transition: none;
+  }
+}
