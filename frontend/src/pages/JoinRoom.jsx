@@ -75,7 +75,7 @@ function JoinRoom() {
           {loading ? "Joining..." : "Join Room"}
         </button>
 
-        <button className="secondary-button" onClick={() => navigate("/")}>
+        <button className="secondary-button" onClick={() => navigate("/play")}>
           Back
         </button>
       </div>

@@ -451,7 +451,7 @@ function Lobby() {
             BACK HOME
         ================================= */}
 
-        <button onClick={() => navigate("/")}>Back Home</button>
+        <button onClick={() => navigate("/Play")}>Back Home</button>
       </div>
     </div>
   );

@@ -66,7 +66,7 @@ function CreateRoom() {
         {loading ? "Creating..." : "Create Room"}
       </button>
 
-      <button onClick={() => navigate("/")} disabled={loading}>
+      <button onClick={() => navigate("/play")} disabled={loading}>
         Back
       </button>
     </div>
