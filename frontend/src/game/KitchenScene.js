@@ -8,7 +8,7 @@ import itemsUrl from "../assets/items.png";
 
 import chefBlueUrl from "../assets/chef-blue.png";
 import chefOrangeUrl from "../assets/chef-orange.png";
-import { createGameControls } from ".gameControls";
+import { createGameControls } from "./gameControls";
 
 // Hitbox chân người chơi
 const FEET_HALF_W = 5;
