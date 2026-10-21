@@ -70,14 +70,7 @@ function App() {
           element={session ? <Navigate to="/" replace /> : <Register />}
         />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute session={session}>
-              <LandingPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<LandingPage />} />
 
         <Route
           path="/createroom"
