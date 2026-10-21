@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { supabase } from "./lib/supabase";
 
-import Home from "./pages/Home";
+import Play from "./pages/Play";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import CreateRoom from "./pages/CreateRoom";
@@ -12,6 +12,8 @@ import Lobby from "./pages/Lobby";
 import Recipes from "./pages/Recipes";
 import Game from "./pages/Game";
 import "./App.css";
+import LandingPage from "./pages/LandingPage";
+import useFullscreenHotkey from "./useFullscreenHotkey";
 
 function ProtectedRoute({ session, children }) {
   if (!session) {
@@ -25,6 +27,8 @@ function App() {
   const [session, setSession] = useState(null);
 
   const [loading, setLoading] = useState(true);
+
+  useFullscreenHotkey("f");
 
   useEffect(() => {
     const loadSession = async () => {
@@ -70,7 +74,7 @@ function App() {
           path="/"
           element={
             <ProtectedRoute session={session}>
-              <Home />
+              <LandingPage />
             </ProtectedRoute>
           }
         />
@@ -80,6 +84,15 @@ function App() {
           element={
             <ProtectedRoute session={session}>
               <CreateRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/play"
+          element={
+            <ProtectedRoute session={session}>
+              <Play />
             </ProtectedRoute>
           }
         />
