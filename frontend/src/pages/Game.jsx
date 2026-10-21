@@ -14,12 +14,22 @@ import FullscreenButton from "./Fullscreenhint";
 
 import "./Game.css";
 
+import {
+  useEscapeLockInFullscreen,
+  toggleFullscreen,
+  useIsFullscreen,
+} from "../useFullscreenHotkey";
+
 function Game() {
   const { roomCode } = useParams();
 
   const navigate = useNavigate();
 
   const gameRef = useRef(null);
+
+  // Chỉ khóa ESC trong trang game; nhớ gọi trước mọi return sớm
+  useEscapeLockInFullscreen();
+  const isFs = useIsFullscreen();
 
   const [user, setUser] = useState(null);
   const [match, setMatch] = useState(null);
@@ -248,6 +258,10 @@ function Game() {
                   onClick={() => setMenuView("settings")}
                 >
                   Settings
+                </button>
+
+                <button className="gm-btn" onClick={toggleFullscreen}>
+                  {isFs ? "Exit fullscreen" : "Fullscreen"}
                 </button>
 
                 <button
