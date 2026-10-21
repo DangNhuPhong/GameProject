@@ -8,6 +8,7 @@ import itemsUrl from "../assets/items.png";
 
 import chefBlueUrl from "../assets/chef-blue.png";
 import chefOrangeUrl from "../assets/chef-orange.png";
+import { createGameControls } from "./Gamecontrols";
 
 // Hitbox chân người chơi
 const FEET_HALF_W = 5;
@@ -111,9 +112,9 @@ function heldItemOffset(facing, facingRight) {
 }
 
 function chefFacing(dx, dy, current) {
-  if (dx !== 0) return "side";
-  if (dy !== 0) return dy > 0 ? "down" : "up";
-  return current;
+  if (dx === 0 && dy === 0) return current;
+  if (Math.abs(dx) >= Math.abs(dy)) return "side";
+  return dy > 0 ? "down" : "up";
 }
 
 // Vẽ hình elip bằng từng pixel (có viền), dùng làm texture: luôn sắc nét khi zoom
@@ -156,7 +157,7 @@ function createPixelTextures(scene) {
 // =====================================
 
 /** Creates the Phaser scene with the current player, room and map. */
-export function createKitchenScene({ user, roomCode, mapId }) {
+export function createKitchenScene({ user, roomCode, mapId, onLeave }) {
   const mapCfg = getMapConfig(mapId);
 
   return class KitchenScene extends Phaser.Scene {
@@ -219,6 +220,13 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       });
     }
 
+    applyControlMode() {
+      if (this.hudZoom) {
+        this.hudZoom.style.display =
+          this.controls.mode === "joystick" ? "none" : "block";
+      }
+    }
+
     // =====================================
     // CREATE
     // =====================================
@@ -243,7 +251,8 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       this.collisionLayers = [];
 
       this.input.keyboard.on("keydown-ESC", () => {
-        this.closeOrders();
+        if (this.ordersEl) this.closeOrders();
+        else this.controls?.toggleMenu();
       });
 
       // Ảnh nền nguyên bản (nếu map có)
@@ -298,6 +307,16 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       // =================================
 
       this.createHud();
+
+      this.controls = createGameControls(this, {
+        onInteract: () => this.handleInteract(),
+        onDrop: () => this.dropItem(),
+        onZoom: () =>
+          this.setZoomMode(this.zoomMode === "near" ? "far" : "near"),
+        onLeave,
+        onModeChange: () => this.applyControlMode(),
+      });
+      this.applyControlMode();
 
       this.stationBar = this.add.graphics().setDepth(7);
 
@@ -1371,6 +1390,8 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       return best;
     }
     handleInteract() {
+      if (this.controls?.menuOpen) return;
+
       // Bảng order đang mở: E luôn đóng được, không phụ thuộc khoảng cách
       if (this.ordersEl) {
         this.closeOrders();
@@ -1688,12 +1709,22 @@ export function createKitchenScene({ user, roomCode, mapId }) {
     // =====================================
 
     update(time, delta) {
+      const stick = this.controls.getVector();
+
       let dx = (this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0);
       let dy = (this.keys.S.isDown ? 1 : 0) - (this.keys.W.isDown ? 1 : 0);
 
-      if (dx !== 0 && dy !== 0) {
+      if (stick) {
+        dx = stick.x;
+        dy = stick.y;
+      } else if (dx !== 0 && dy !== 0) {
         dx *= Math.SQRT1_2;
         dy *= Math.SQRT1_2;
+      }
+
+      if (this.controls.menuOpen) {
+        dx = 0;
+        dy = 0;
       }
 
       const step = PLAYER_SPEED * (delta / 1000);
@@ -1739,6 +1770,9 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       const hint = [];
 
       const action = this.findInteraction();
+
+      this.controls.setActionLabel(action ? action.label : null);
+      this.controls.setDropItem(heldItem ? heldItem.type : null);
 
       if (action) {
         hint.push({ key: "E", label: action.label });
@@ -1788,7 +1822,7 @@ export function createKitchenScene({ user, roomCode, mapId }) {
       }
 
       this.updateStationViews();
-      this.setHint(hint);
+      this.setHint(this.controls.mode === "joystick" ? [] : hint);
     }
   };
 }
