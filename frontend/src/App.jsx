@@ -11,9 +11,12 @@ import JoinRoom from "./pages/JoinRoom";
 import Lobby from "./pages/Lobby";
 import Recipes from "./pages/Recipes";
 import Game from "./pages/Game";
-import "./App.css";
 import LandingPage from "./pages/LandingPage";
+
 import useFullscreenHotkey from "./useFullscreenHotkey";
+import FullscreenButton from "./pages/Fullscreenhint";
+
+import "./App.css";
 
 function ProtectedRoute({ session, children }) {
   if (!session) {
@@ -25,7 +28,6 @@ function ProtectedRoute({ session, children }) {
 
 function App() {
   const [session, setSession] = useState(null);
-
   const [loading, setLoading] = useState(true);
 
   useFullscreenHotkey("f");
@@ -70,14 +72,7 @@ function App() {
           element={session ? <Navigate to="/" replace /> : <Register />}
         />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute session={session}>
-              <LandingPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<LandingPage />} />
 
         <Route
           path="/createroom"
@@ -114,6 +109,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/game/:roomCode"
           element={
@@ -134,6 +130,8 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      <FullscreenButton />
     </BrowserRouter>
   );
 }

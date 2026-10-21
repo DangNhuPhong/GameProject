@@ -1,0 +1,46 @@
+.fs-btn {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+
+  font:
+    700 12px/1 "Trebuchet MS",
+    "Segoe UI",
+    Verdana,
+    sans-serif;
+  color: #fff;
+  background: rgba(18, 48, 46, 0.85);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.7;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fs-btn:hover,
+.fs-btn:active {
+  opacity: 1;
+}
+
+.fs-btn__key {
+  min-width: 1.4em;
+  padding: 2px 4px;
+  text-align: center;
+  color: #12302e;
+  background: #fff3d6;
+  border-radius: 4px;
+  box-shadow: 0 2px 0 #a8743b;
+}
+
+/* Mobile: bỏ chữ "F" vì không có bàn phím */
+@media (hover: none) and (pointer: coarse) {
+  .fs-btn__key {
+    display: none;
+  }
+}

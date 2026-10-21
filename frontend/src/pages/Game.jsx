@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate, useParams } from "react-router-dom";
 import Phaser from "phaser";
@@ -7,9 +7,18 @@ import { supabase } from "../lib/supabase";
 
 import { getMatch, getRecipes } from "../services/api";
 import { createKitchenScene } from "../game/KitchenScene";
+import { loadControlMode, saveControlMode } from "../game/gameControls";
 import { socket } from "../services/socket";
 
+import FullscreenButton from "./Fullscreenhint";
+
 import "./Game.css";
+
+import {
+  useEscapeLockInFullscreen,
+  toggleFullscreen,
+  useIsFullscreen,
+} from "../useFullscreenHotkey";
 
 function Game() {
   const { roomCode } = useParams();
@@ -18,20 +27,53 @@ function Game() {
 
   const gameRef = useRef(null);
 
+  // Chỉ khóa ESC trong trang game; nhớ gọi trước mọi return sớm
+  useEscapeLockInFullscreen();
+  const isFs = useIsFullscreen();
+
   const [user, setUser] = useState(null);
-
   const [match, setMatch] = useState(null);
-
   const [recipes, setRecipes] = useState([]);
-
   const [loading, setLoading] = useState(true);
 
-  const [ordersOpen, setOrdersOpen] = useState(true);
+  // ----- Menu -----
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuView, setMenuView] = useState("main"); // "main" | "settings"
+  const [controlMode, setControlMode] = useState(loadControlMode);
+
+  // Scene đọc trạng thái menu qua ref (không bị kẹt giá trị cũ)
+  const menuOpenRef = useRef(false);
+  const modeRef = useRef(controlMode);
+
+  useEffect(() => {
+    menuOpenRef.current = menuOpen;
+  }, [menuOpen]);
+
+  useEffect(() => {
+    modeRef.current = controlMode;
+  }, [controlMode]);
+
+  const ui = useMemo(
+    () => ({
+      getMode: () => modeRef.current,
+      isMenuOpen: () => menuOpenRef.current,
+      toggleMenu: () => {
+        setMenuView("main");
+        setMenuOpen((open) => !open);
+      },
+    }),
+    [],
+  );
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const changeMode = (mode) => {
+    setControlMode(mode);
+    saveControlMode(mode);
+  };
 
   // =====================================
-
   // LOAD GAME DATA
-
   // =====================================
 
   useEffect(() => {
@@ -45,31 +87,22 @@ function Game() {
 
         if (!user) {
           navigate("/login");
-
           return;
         }
 
         const matchResult = await getMatch(roomCode);
-
         const recipeData = await getRecipes();
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         setUser(user);
-
         setMatch(matchResult.data);
-
         setRecipes(recipeData);
-
         setLoading(false);
       } catch (error) {
         console.error("Game loading error:", error);
 
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     };
 
@@ -81,18 +114,13 @@ function Game() {
   }, [navigate, roomCode]);
 
   // =====================================
-
   // PHASER GAME
-
   // =====================================
 
   useEffect(() => {
     if (loading) return;
-
     if (!user) return;
-
     if (!match) return;
-
     if (!gameRef.current) return;
 
     let game;
@@ -101,13 +129,9 @@ function Game() {
       user,
       roomCode,
       mapId: "bistro",
+      ui,
     });
 
-    // Canvas có kích thước đúng bằng số PIXEL VẬT LÝ của cửa sổ
-    // (CSS px x devicePixelRatio), rồi thu lại bằng zoom = 1 / dpr.
-    // => 1 pixel canvas = 1 pixel màn hình thật, trình duyệt không phải
-    //    kéo giãn nên không bị mờ, kể cả khi Windows đặt tỉ lệ 125% / 150%.
-    // Việc phóng to pixel-art do camera trong KitchenScene lo (zoom số nguyên).
     const getSize = () => {
       const dpr = window.devicePixelRatio || 1;
 
@@ -122,25 +146,17 @@ function Game() {
 
     const config = {
       type: Phaser.AUTO,
-
       parent: gameRef.current,
-
       backgroundColor: "#12302e",
 
-      // Pixel art: tắt làm mịn ảnh, làm tròn vị trí vẽ
       pixelArt: true,
-
       roundPixels: true,
-
       antialias: false,
 
       scale: {
         mode: Phaser.Scale.NONE,
-
         width: w,
-
         height: h,
-
         zoom: 1 / dpr,
       },
 
@@ -149,24 +165,17 @@ function Game() {
 
     game = new Phaser.Game(config);
     window.__game = game;
-    // Đổi kích thước cửa sổ / F11 / Ctrl +- → canvas cập nhật theo
+
     const onResize = () => {
       if (!game) return;
 
       const size = getSize();
 
       game.scale.setZoom(1 / size.dpr);
-
       game.scale.resize(size.w, size.h);
     };
 
     window.addEventListener("resize", onResize);
-
-    // =====================================
-
-    // CLEANUP
-
-    // =====================================
 
     return () => {
       window.removeEventListener("resize", onResize);
@@ -199,12 +208,10 @@ function Game() {
 
       if (game) game.destroy(true);
     };
-  }, [loading, user, match, roomCode]);
+  }, [loading, user, match, roomCode, ui]);
 
   // =====================================
-
   // LOADING
-
   // =====================================
 
   if (loading) {
@@ -212,54 +219,94 @@ function Game() {
   }
 
   // =====================================
-
   // GAME UI
-
   // =====================================
 
   return (
     <div className="game-page">
-      {/* Full-screen Phaser map */}
-
       <div ref={gameRef} className="phaser-container" />
 
-      {/* Leave */}
-
-      <button className="leave-button" onClick={() => navigate("/")}>
-        Leave game
+      {/* Nút menu */}
+      <button
+        type="button"
+        className="gm-menu-btn gm-glass"
+        aria-label="Menu"
+        onClick={ui.toggleMenu}
+      >
+        ☰
       </button>
 
-      {/* Orders */}
-
-      <aside className="hud-orders">
-        <button
-          className="orders-toggle"
-          onClick={() => setOrdersOpen((open) => !open)}
-          aria-expanded={ordersOpen}
+      {/* Menu / Settings */}
+      {menuOpen && (
+        <div
+          className="gm-overlay"
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) closeMenu();
+          }}
         >
-          Orders ({recipes.length})
-        </button>
+          <div className="gm-panel gm-glass">
+            {menuView === "main" ? (
+              <>
+                <div className="gm-title">Menu</div>
 
-        {ordersOpen && (
-          <div className="orders-list">
-            {recipes.map((recipe) => (
-              <div className="ticket" key={recipe.id}>
-                <h3>{recipe.name}</h3>
+                <button className="gm-btn" onClick={closeMenu}>
+                  Resume
+                </button>
 
-                <div className="ticket-meta">
-                  <span>{recipe.base_score} pts</span>
+                <button
+                  className="gm-btn"
+                  onClick={() => setMenuView("settings")}
+                >
+                  Settings
+                </button>
 
-                  <span>{recipe.time_limit}s</span>
+                <button className="gm-btn" onClick={toggleFullscreen}>
+                  {isFs ? "Exit fullscreen" : "Fullscreen"}
+                </button>
+
+                <button
+                  className="gm-btn gm-danger"
+                  onClick={() => navigate("/play")}
+                >
+                  Leave room
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="gm-title">Settings</div>
+                <div className="gm-label">Controls</div>
+
+                <div className="gm-seg">
+                  {[
+                    ["keyboard", "Keyboard"],
+                    ["joystick", "Joystick"],
+                  ].map(([value, text]) => (
+                    <button
+                      key={value}
+                      className={`gm-seg-btn${controlMode === value ? " gm-on" : ""}`}
+                      onClick={() => changeMode(value)}
+                    >
+                      {text}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="ticket-bar">
-                  <span />
+                <div className="gm-note">
+                  {controlMode === "keyboard"
+                    ? "Move: W A S D · Interact: E · Drop: Q · Zoom: Z or mouse wheel · Menu: Esc · Fullscreen: F"
+                    : "Drag the joystick to move. Use the E and Q buttons on the right, and 🔍 to zoom."}
                 </div>
-              </div>
-            ))}
+
+                <button className="gm-btn" onClick={() => setMenuView("main")}>
+                  Back
+                </button>
+              </>
+            )}
           </div>
-        )}
-      </aside>
+        </div>
+      )}
+
+      <FullscreenButton />
     </div>
   );
 }
