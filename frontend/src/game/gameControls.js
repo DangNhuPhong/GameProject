@@ -1,13 +1,13 @@
 import Phaser from "phaser";
 
 // =====================================
-// ĐIỀU KHIỂN TRONG GAME: menu + settings + joystick/nút E, Q, zoom
-// Dùng DOM thuần (giống HUD của KitchenScene), mọi class có tiền tố kc-
+// ĐIỀU KHIỂN CẢM ỨNG: joystick + nút E, Q, zoom
+// (Menu / Settings đã chuyển sang Game.jsx)
 // =====================================
 
 const STORAGE_KEY = "kitchen-control-mode"; // "keyboard" | "joystick"
-const DEAD_ZONE = 0.18; // vùng chết của joystick (0..1)
-const STICK_TRAVEL = 46; // px núm joystick được kéo ra khỏi tâm
+const DEAD_ZONE = 0.18;
+const STICK_TRAVEL = 46;
 
 /** Chế độ đã lưu; lần đầu: thiết bị cảm ứng → joystick, còn lại → bàn phím. */
 export function loadControlMode() {
@@ -23,6 +23,14 @@ export function loadControlMode() {
     : "keyboard";
 }
 
+export function saveControlMode(mode) {
+  try {
+    localStorage.setItem(STORAGE_KEY, mode);
+  } catch {
+    // bỏ qua
+  }
+}
+
 const CSS = `
 .kc-root{position:fixed;inset:0;z-index:70;pointer-events:none;user-select:none;-webkit-user-select:none;
   -webkit-touch-callout:none;font-family:'Trebuchet MS','Segoe UI',Verdana,sans-serif;font-weight:700;color:#fff}
@@ -35,11 +43,6 @@ const CSS = `
   backdrop-filter:blur(12px) saturate(170%);-webkit-backdrop-filter:blur(12px) saturate(170%);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 8px 24px rgba(0,0,0,.35)}
 
-/* ----- Nút menu ----- */
-.kc-menu-btn{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:calc(14px + env(safe-area-inset-left,0px));
-  width:46px;height:46px;padding:0;border-radius:50%;font:inherit;font-size:1.25rem;cursor:pointer;pointer-events:auto}
-
-/* ----- Joystick + nút cảm ứng ----- */
 .kc-touch{position:absolute;inset:0;pointer-events:none}
 .kc-stick{position:absolute;left:calc(28px + env(safe-area-inset-left,0px));bottom:calc(40px + env(safe-area-inset-bottom,0px));
   width:132px;height:132px;border-radius:50%;pointer-events:auto;touch-action:none}
@@ -59,23 +62,6 @@ const CSS = `
 .kc-dim{opacity:.55}
 .kc-pill{max-width:60vw;padding:6px 14px;border-radius:999px;font-size:.85rem;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;pointer-events:none}
-
-/* ----- Menu / Settings ----- */
-.kc-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;
-  background:rgba(0,0,0,.45);pointer-events:auto}
-.kc-panel{width:min(100%,340px);display:flex;flex-direction:column;gap:10px;padding:22px;border-radius:28px}
-.kc-title{font-size:1.3rem;text-align:center;margin-bottom:4px}
-.kc-label{font-size:.85rem;opacity:.9;margin-top:4px}
-.kc-note{font-size:.78rem;font-weight:600;line-height:1.5;opacity:.9}
-.kc-btn{padding:13px 20px;font:inherit;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.45);
-  background:linear-gradient(135deg,rgba(255,255,255,.32),rgba(255,255,255,.1));
-  border:1px solid rgba(255,255,255,.4);border-radius:999px;cursor:pointer;transition:background .2s,transform .12s}
-.kc-btn:hover{background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,.18))}
-.kc-btn:active{transform:scale(.97)}
-.kc-danger{background:linear-gradient(135deg,rgba(255,90,80,.45),rgba(255,90,80,.15));border-color:rgba(255,160,150,.5)}
-.kc-seg{display:flex;gap:6px;padding:4px;border-radius:999px;background:rgba(0,0,0,.28)}
-.kc-seg-btn{flex:1;padding:10px;border:0;border-radius:999px;background:transparent;color:#fff;font:inherit;font-weight:700;cursor:pointer}
-.kc-seg-btn.kc-on{background:linear-gradient(135deg,#ffd54a,#f0a030);color:#3a2300;text-shadow:none}
 `;
 
 function el(tag, className, text) {
@@ -87,17 +73,22 @@ function el(tag, className, text) {
 }
 
 /**
- * Tạo menu + điều khiển cảm ứng cho một scene.
- * opts: { onInteract, onDrop, onZoom, onLeave?, onModeChange? }
+ * opts: {
+ *   onInteract, onDrop, onZoom,
+ *   getMode()    -> "keyboard" | "joystick"   (lấy từ Game.jsx)
+ *   isMenuOpen() -> boolean                   (lấy từ Game.jsx)
+ *   onModeChange?(mode)
+ * }
  */
 export function createGameControls(scene, opts = {}) {
-  const { onInteract, onDrop, onZoom, onLeave, onModeChange } = opts;
+  const { onInteract, onDrop, onZoom, getMode, isMenuOpen, onModeChange } =
+    opts;
 
-  let mode = loadControlMode();
-  let menuOpen = false;
-  let menuView = "main"; // "main" | "settings"
-  let stick = null; // { id, x, y } khi đang chạm joystick
+  const menuOpen = () => !!isMenuOpen?.();
+
+  let stick = null; // { id, x, y }
   let lastLabel = undefined;
+  let appliedMode = null;
 
   const root = el("div", "kc-root");
   root.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -140,7 +131,6 @@ export function createGameControls(scene, opts = {}) {
       return;
     }
 
-    // Co giãn lại để ngay sau vùng chết là bắt đầu từ 0
     const k = Math.min(1, (mag - DEAD_ZONE) / (1 - DEAD_ZONE)) / mag;
     stick.x = dx * k;
     stick.y = dy * k;
@@ -165,12 +155,12 @@ export function createGameControls(scene, opts = {}) {
   );
 
   // ---------------------------------
-  // NÚT E / Q / ZOOM (bấm bằng pointerdown cho phản hồi nhanh)
+  // NÚT E / Q / ZOOM
   // ---------------------------------
   const press = (btn, fn) =>
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (!menuOpen && fn) fn();
+      if (!menuOpen() && fn) fn();
     });
 
   const actions = el("div", "kc-actions");
@@ -195,127 +185,31 @@ export function createGameControls(scene, opts = {}) {
   actions.append(zoomBtn, pill, row);
   touch.append(base, actions);
 
+  root.append(touch);
+
   // ---------------------------------
-  // MENU / SETTINGS
+  // ĐỒNG BỘ VỚI Game.jsx (gọi mỗi frame từ scene.update)
   // ---------------------------------
-  const menuBtn = el("button", "kc-menu-btn kc-glass", "☰");
-  menuBtn.setAttribute("aria-label", "Menu");
+  function applyMode(notify) {
+    const mode = getMode ? getMode() : "keyboard";
 
-  const overlay = el("div", "kc-overlay kc-hidden");
-  const panel = el("div", "kc-panel kc-glass");
-  overlay.appendChild(panel);
+    if (mode === appliedMode) return;
 
-  overlay.addEventListener("pointerdown", (e) => {
-    if (e.target === overlay) closeMenu();
-  });
-
-  const button = (text, fn, extra = "") => {
-    const b = el("button", `kc-btn ${extra}`.trim(), text);
-    b.addEventListener("click", fn);
-    return b;
-  };
-
-  function applyMode() {
+    appliedMode = mode;
     touch.classList.toggle("kc-hidden", mode !== "joystick");
+
     if (mode !== "joystick") releaseStick();
+    if (notify && onModeChange) onModeChange(mode);
   }
 
-  function setMode(value) {
-    if (value === mode) return;
+  applyMode(false);
 
-    mode = value;
+  const sync = () => {
+    applyMode(true);
 
-    try {
-      localStorage.setItem(STORAGE_KEY, mode);
-    } catch {
-      // bỏ qua
-    }
-
-    applyMode();
-    if (onModeChange) onModeChange(mode);
-    render();
-  }
-
-  function render() {
-    panel.textContent = "";
-
-    if (menuView === "main") {
-      panel.append(
-        el("div", "kc-title", "Menu"),
-        button("Resume", closeMenu),
-        button("Settings", () => {
-          menuView = "settings";
-          render();
-        }),
-      );
-
-      if (onLeave) {
-        panel.append(
-          button(
-            "Leave room",
-            () => {
-              closeMenu();
-              onLeave();
-            },
-            "kc-danger",
-          ),
-        );
-      }
-
-      return;
-    }
-
-    const seg = el("div", "kc-seg");
-
-    [
-      ["keyboard", "Keyboard"],
-      ["joystick", "Joystick"],
-    ].forEach(([value, text]) => {
-      const b = el("button", `kc-seg-btn${mode === value ? " kc-on" : ""}`, text);
-      b.addEventListener("click", () => setMode(value));
-      seg.appendChild(b);
-    });
-
-    panel.append(
-      el("div", "kc-title", "Settings"),
-      el("div", "kc-label", "Controls"),
-      seg,
-      el(
-        "div",
-        "kc-note",
-        mode === "keyboard"
-          ? "Move: W A S D · Interact: E · Drop: Q · Zoom: Z or mouse wheel · Menu: Esc · Fullscreen: F"
-          : "Drag the joystick to move. Use the E and Q buttons on the right, and 🔍 to zoom.",
-      ),
-      button("Back", () => {
-        menuView = "main";
-        render();
-      }),
-    );
-  }
-
-  function openMenu() {
-    menuOpen = true;
-    menuView = "main";
-    releaseStick();
-    render();
-    overlay.classList.remove("kc-hidden");
-  }
-
-  function closeMenu() {
-    menuOpen = false;
-    overlay.classList.add("kc-hidden");
-  }
-
-  function toggleMenu() {
-    if (menuOpen) closeMenu();
-    else openMenu();
-  }
-
-  menuBtn.addEventListener("click", toggleMenu);
-
-  root.append(touch, menuBtn, overlay);
-  applyMode();
+    // Mở menu giữa lúc đang kéo joystick → thả núm ra
+    if (menuOpen() && stick) releaseStick();
+  };
 
   // ---------------------------------
   // CLEANUP
@@ -332,20 +226,20 @@ export function createGameControls(scene, opts = {}) {
   // ---------------------------------
   return {
     get mode() {
-      return mode;
+      return getMode ? getMode() : "keyboard";
     },
 
     get menuOpen() {
-      return menuOpen;
+      return menuOpen();
     },
 
-    /** Vector joystick {x, y} (-1..1), hoặc null nếu không dùng joystick lúc này. */
+    sync,
+
     getVector() {
-      if (mode !== "joystick" || menuOpen || !stick) return null;
+      if (this.mode !== "joystick" || menuOpen() || !stick) return null;
       return { x: stick.x, y: stick.y };
     },
 
-    /** Chữ hiện trên nút E (vd "Chop", "Serve dish"); null = không có hành động. */
     setActionLabel(label) {
       if (label === lastLabel) return;
 
@@ -355,13 +249,10 @@ export function createGameControls(scene, opts = {}) {
       eBtn.classList.toggle("kc-dim", !label);
     },
 
-    /** Truyền loại item đang cầm để hiện nút Q; null = ẩn. */
     setDropItem(type) {
       qBtn.classList.toggle("kc-hidden", !type);
     },
 
-    toggleMenu,
-    closeMenu,
     destroy,
   };
 }
