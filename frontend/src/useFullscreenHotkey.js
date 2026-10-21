@@ -1,4 +1,45 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+
+export function isFullscreenSupported() {
+  const el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+}
+
+export function toggleFullscreen() {
+  const el = document.documentElement;
+
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) {
+      Promise.resolve(req.call(el)).catch(console.error);
+      // Android: khoá ngang cho game (iOS bỏ qua)
+      screen.orientation?.lock?.("landscape").catch(() => {});
+    }
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+
+export function useIsFullscreen() {
+  const [isFs, setIsFs] = useState(false);
+
+  useEffect(() => {
+    const update = () =>
+      setIsFs(
+        !!(document.fullscreenElement || document.webkitFullscreenElement),
+      );
+
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("webkitfullscreenchange", update);
+    return () => {
+      document.removeEventListener("fullscreenchange", update);
+      document.removeEventListener("webkitfullscreenchange", update);
+    };
+  }, []);
+
+  return isFs;
+}
 
 export default function useFullscreenHotkey(key = "f") {
   useEffect(() => {
@@ -14,11 +55,7 @@ export default function useFullscreenHotkey(key = "f") {
           ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
       if (typing) return;
 
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(console.error);
-      } else {
-        document.exitFullscreen();
-      }
+      toggleFullscreen();
     };
 
     window.addEventListener("keydown", onKeyDown);
