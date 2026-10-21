@@ -225,41 +225,9 @@ function Game() {
 
       {/* Leave */}
 
-      <button className="leave-button" onClick={() => navigate("/")}>
+      <button className="leave-button" onClick={() => navigate("/play")}>
         Leave game
       </button>
-
-      {/* Orders */}
-
-      <aside className="hud-orders">
-        <button
-          className="orders-toggle"
-          onClick={() => setOrdersOpen((open) => !open)}
-          aria-expanded={ordersOpen}
-        >
-          Orders ({recipes.length})
-        </button>
-
-        {ordersOpen && (
-          <div className="orders-list">
-            {recipes.map((recipe) => (
-              <div className="ticket" key={recipe.id}>
-                <h3>{recipe.name}</h3>
-
-                <div className="ticket-meta">
-                  <span>{recipe.base_score} pts</span>
-
-                  <span>{recipe.time_limit}s</span>
-                </div>
-
-                <div className="ticket-bar">
-                  <span />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </aside>
     </div>
   );
 }
