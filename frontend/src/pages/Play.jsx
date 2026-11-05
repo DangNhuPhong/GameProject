@@ -6,6 +6,13 @@ import "./Play.css";
 function Play() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  // "modes": chọn chế độ chơi | "online": tạo / vào phòng
+  const [view, setView] = useState("modes");
+
+  // Chơi online bắt buộc đăng nhập
+  const goOnline = (path) => navigate(loggedIn ? path : "/login");
 
   useEffect(() => {
     let active = true;
@@ -15,11 +22,13 @@ function Play() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // Chưa đăng nhập thì chuyển sang trang login
+      // Single / Co-op cùng máy không cần đăng nhập, nên chỉ tải hồ sơ khi đã đăng nhập
       if (!user) {
-        navigate("/login", { replace: true });
+        if (active) setLoggedIn(false);
         return;
       }
+
+      if (active) setLoggedIn(true);
 
       const { data, error } = await supabase
         .from("profiles")
@@ -59,20 +68,37 @@ function Play() {
       )}
 
       {/* Thẻ ở giữa */}
-      <nav className="pl-glass pl-card" aria-label="Play menu">
-        <button className="pl-btn" onClick={() => navigate("/createroom")}>
-          Create Room
-        </button>
-        <button className="pl-btn" onClick={() => navigate("/joinroom")}>
-          Join Room
-        </button>
-        <button className="pl-btn" onClick={() => navigate("/maps")}>
-          Map
-        </button>
-        <button className="pl-btn pl-btn-back" onClick={() => navigate("/")}>
-          Back
-        </button>
-      </nav>
+      {view === "modes" ? (
+        <nav className="pl-glass pl-card" aria-label="Game mode">
+          <button className="pl-btn" onClick={() => navigate("/single")}>
+            Single Player
+          </button>
+          <button className="pl-btn" onClick={() => navigate("/local")}>
+            Local Co-op
+          </button>
+          <button className="pl-btn" onClick={() => setView("online")}>
+            Online Co-op
+          </button>
+          <button className="pl-btn pl-btn-back" onClick={() => navigate("/")}>
+            Back
+          </button>
+        </nav>
+      ) : (
+        <nav className="pl-glass pl-card" aria-label="Online co-op">
+          <button className="pl-btn" onClick={() => goOnline("/createroom")}>
+            Create Room
+          </button>
+          <button className="pl-btn" onClick={() => goOnline("/joinroom")}>
+            Join Room
+          </button>
+          <button
+            className="pl-btn pl-btn-back"
+            onClick={() => setView("modes")}
+          >
+            Back
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
