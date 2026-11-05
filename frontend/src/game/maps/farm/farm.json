@@ -304,8 +304,8 @@
                  "type":"station",
                  "visible":true,
                  "width":40,
-                 "x":177.5,
-                 "y":168.25
+                 "x":182,
+                 "y":162.75
                 }, 
                 {
                  "height":16,
@@ -350,8 +350,8 @@
                  "type":"station",
                  "visible":true,
                  "width":36,
-                 "x":141.25,
-                 "y":168.25
+                 "x":138.75,
+                 "y":162.75
                 }, 
                 {
                  "height":0,
