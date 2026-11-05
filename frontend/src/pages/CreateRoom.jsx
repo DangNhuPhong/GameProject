@@ -25,6 +25,8 @@ function CreateRoom() {
         return;
       }
 
+      console.log("user.id gửi lên:", user.id, "| email:", user.email);
+
       const result = await createMatch(user.id, Number(maxPlayers));
 
       const roomCode = result?.data?.room_code;

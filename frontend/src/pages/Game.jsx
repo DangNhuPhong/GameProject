@@ -128,7 +128,12 @@ function Game() {
     const KitchenScene = createKitchenScene({
       user,
       roomCode,
+<<<<<<< Updated upstream
       mapId: "bistro",
+=======
+      mapId: "farm",
+      mode,
+>>>>>>> Stashed changes
       ui,
     });
 
