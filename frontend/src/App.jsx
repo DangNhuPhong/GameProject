@@ -83,14 +83,12 @@ function App() {
           }
         />
 
-        <Route
-          path="/play"
-          element={
-            <ProtectedRoute session={session}>
-              <Play />
-            </ProtectedRoute>
-          }
-        />
+        {/* Màn chọn chế độ: không cần đăng nhập (Single / Local chạy offline) */}
+        <Route path="/play" element={<Play />} />
+
+        {/* Chế độ offline: không cần đăng nhập, không cần server */}
+        <Route path="/single" element={<Game mode="single" />} />
+        <Route path="/local" element={<Game mode="coop-local" />} />
 
         <Route
           path="/joinroom"
@@ -114,7 +112,7 @@ function App() {
           path="/game/:roomCode"
           element={
             <ProtectedRoute session={session}>
-              <Game />
+              <Game mode="coop-online" />
             </ProtectedRoute>
           }
         />

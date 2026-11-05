@@ -5,8 +5,6 @@ import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
 import PizzaOvenStation from "./PizzaOvenStation.js";
 
-import { getMapLayout } from "../maps/index.js";
-
 // =====================================
 // LUẬT CỦA TỪNG LOẠI TRẠM (khoá theo "kind" trong Tiled)
 //
@@ -46,7 +44,9 @@ const STATION_FACTORIES = {
 };
 
 class GameRoom {
-  constructor(roomCode, mapId = "kitchen") {
+  // layout: kết quả readLayout() của map (shelves, stations, spawn, id).
+  // GameRoom KHÔNG tự đọc file map nên chạy được cả ở trình duyệt lẫn Node.
+  constructor(roomCode, layout) {
     this.roomCode = roomCode;
 
     this.items = [];
@@ -57,9 +57,6 @@ class GameRoom {
     this.nextOrderAt = Date.now() + 12000;
 
     this.score = 0;
-
-    // Layout lấy từ file map
-    const layout = getMapLayout(mapId);
 
     this.mapId = layout.id;
 

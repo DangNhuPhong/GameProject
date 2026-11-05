@@ -20,8 +20,28 @@ import {
   useIsFullscreen,
 } from "../useFullscreenHotkey";
 
-function Game() {
+// Chế độ chơi:
+//   "single"      : 1 người, offline
+//   "coop-local"  : 2 người chung máy, offline
+//   "coop-online" : qua server (mặc định, route /game/:roomCode)
+const MODE_TITLES = {
+  single: "Single player",
+  "coop-local": "Local co-op",
+  "coop-online": "Online co-op",
+};
+
+const CONTROL_NOTES = {
+  single:
+    "Move: W A S D or arrow keys · Interact: E · Drop: Q · Zoom: Z or mouse wheel · Menu: Esc · Fullscreen: F",
+  "coop-local":
+    "Player 1 (blue): W A S D · E interact · Q drop.   Player 2 (orange): arrow keys · Enter interact · Shift drop.   Menu: Esc · Fullscreen: F",
+  "coop-online":
+    "Move: W A S D · Interact: E · Drop: Q · Zoom: Z or mouse wheel · Menu: Esc · Fullscreen: F",
+};
+
+function Game({ mode = "coop-online" }) {
   const { roomCode } = useParams();
+  const offline = mode !== "coop-online";
 
   const navigate = useNavigate();
 
@@ -80,6 +100,14 @@ function Game() {
     let mounted = true;
 
     const loadGame = async () => {
+      // Single / Co-op cùng máy: chạy hoàn toàn offline, không cần đăng nhập
+      if (offline) {
+        setUser({ id: "local" });
+        setMatch({ offline: true });
+        setLoading(false);
+        return;
+      }
+
       try {
         const {
           data: { user },
@@ -111,7 +139,7 @@ function Game() {
     return () => {
       mounted = false;
     };
-  }, [navigate, roomCode]);
+  }, [navigate, roomCode, offline]);
 
   // =====================================
   // PHASER GAME
@@ -129,6 +157,7 @@ function Game() {
       user,
       roomCode,
       mapId: "bistro",
+      mode,
       ui,
     });
 
@@ -180,35 +209,38 @@ function Game() {
     return () => {
       window.removeEventListener("resize", onResize);
 
-      [
-        "game-state",
-        "item-created",
-        "item-picked",
-        "item-dropped",
-        "plate-created",
-        "plate-picked",
-        "plate-dropped",
-        "station-updated",
-        "player-position",
-        "player-joined",
-        "player-left",
-        "orders-updated",
-        "orders-list",
-        "item-removed",
-        "order-completed",
-        "interaction-error",
-        "disconnect",
-      ].forEach((ev) => socket.off(ev));
+      // Online: gỡ listener + ngắt socket. Offline: scene tự dừng LocalTransport.
+      if (!offline) {
+        [
+          "game-state",
+          "item-created",
+          "item-picked",
+          "item-dropped",
+          "plate-created",
+          "plate-picked",
+          "plate-dropped",
+          "station-updated",
+          "player-position",
+          "player-joined",
+          "player-left",
+          "orders-updated",
+          "orders-list",
+          "item-removed",
+          "order-completed",
+          "interaction-error",
+          "disconnect",
+        ].forEach((ev) => socket.off(ev));
+      }
 
       document
         .querySelectorAll("[data-orders-panel]")
         .forEach((n) => n.remove());
 
-      socket.disconnect();
+      if (!offline) socket.disconnect();
 
       if (game) game.destroy(true);
     };
-  }, [loading, user, match, roomCode, ui]);
+  }, [loading, user, match, roomCode, ui, mode, offline]);
 
   // =====================================
   // LOADING
@@ -231,7 +263,10 @@ function Game() {
         type="button"
         className="gm-menu-btn gm-glass"
         aria-label="Menu"
-        onClick={ui.toggleMenu}
+        onClick={(e) => {
+          e.currentTarget.blur(); // tránh phím Enter (người chơi 2) bấm lại nút này
+          ui.toggleMenu();
+        }}
       >
         ☰
       </button>
@@ -248,6 +283,7 @@ function Game() {
             {menuView === "main" ? (
               <>
                 <div className="gm-title">Menu</div>
+                <div className="gm-note">{MODE_TITLES[mode]}</div>
 
                 <button className="gm-btn" onClick={closeMenu}>
                   Resume
@@ -268,7 +304,7 @@ function Game() {
                   className="gm-btn gm-danger"
                   onClick={() => navigate("/play")}
                 >
-                  Leave room
+                  {offline ? "Quit game" : "Leave room"}
                 </button>
               </>
             ) : (
@@ -276,24 +312,27 @@ function Game() {
                 <div className="gm-title">Settings</div>
                 <div className="gm-label">Controls</div>
 
-                <div className="gm-seg">
-                  {[
-                    ["keyboard", "Keyboard"],
-                    ["joystick", "Joystick"],
-                  ].map(([value, text]) => (
-                    <button
-                      key={value}
-                      className={`gm-seg-btn${controlMode === value ? " gm-on" : ""}`}
-                      onClick={() => changeMode(value)}
-                    >
-                      {text}
-                    </button>
-                  ))}
-                </div>
+                {/* Co-op cùng máy chỉ dùng bàn phím */}
+                {mode !== "coop-local" && (
+                  <div className="gm-seg">
+                    {[
+                      ["keyboard", "Keyboard"],
+                      ["joystick", "Joystick"],
+                    ].map(([value, text]) => (
+                      <button
+                        key={value}
+                        className={`gm-seg-btn${controlMode === value ? " gm-on" : ""}`}
+                        onClick={() => changeMode(value)}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="gm-note">
-                  {controlMode === "keyboard"
-                    ? "Move: W A S D · Interact: E · Drop: Q · Zoom: Z or mouse wheel · Menu: Esc · Fullscreen: F"
+                  {mode === "coop-local" || controlMode === "keyboard"
+                    ? CONTROL_NOTES[mode]
                     : "Drag the joystick to move. Use the E and Q buttons on the right, and 🔍 to zoom."}
                 </div>
 
