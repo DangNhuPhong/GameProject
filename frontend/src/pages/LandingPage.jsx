@@ -182,10 +182,20 @@ function LandingPage() {
           >
             <h2 id="about-title">About us</h2>
             <p>
-              OverNấuĂn is a cooperative cooking game: team up, chop, cook and
-              serve orders before the time runs out.
+              We are a student team from MSIS207.R12.CTTT, developing this
+              multiplayer cooking game as a final project for the Web
+              Application Development course. Our game allows players to work
+              together, prepare ingredients, cook dishes, and enjoy a fun
+              cooperative gaming experience.
             </p>
-            {/* Sửa nội dung giới thiệu / thành viên nhóm ở đây */}
+
+            <p>
+              <strong>Disclaimer:</strong> This website and game are created for
+              educational purposes only. This is a non-commercial student
+              project and is not affiliated with or endorsed by any official
+              game, company, or brand. All third-party trademarks and assets
+              belong to their respective owners.
+            </p>
             <button
               className="lp-glass lp-btn"
               onClick={() => setAboutOpen(false)}
