@@ -156,7 +156,7 @@ function Game({ mode = "coop-online" }) {
     const KitchenScene = createKitchenScene({
       user,
       roomCode,
-      mapId: "bistro",
+      mapId: "farm",
       mode,
       ui,
     });
