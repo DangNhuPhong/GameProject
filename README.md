@@ -9,7 +9,7 @@ A real-time, cooperative multiplayer cooking game in the spirit of _Overcooked_.
 
 ---
 
-## Table of contents
+## Table of content
 
 1. [Gameplay](#gameplay)
 2. [Controls](#controls)
