@@ -92,11 +92,9 @@ function LandingPage() {
     await supabase.auth.signOut();
   };
 
-  // Chưa đăng nhập thì sang /login, đã đăng nhập thì vào /play
-  const handlePlay = async () => {
-    const { data } = await supabase.auth.getUser();
-    navigate(data?.user ? "/play" : "/login");
-  };
+  // Vào màn chọn chế độ. Single / Local chơi offline nên không cần đăng nhập;
+  // chỉ chế độ Online mới yêu cầu đăng nhập (kiểm tra ở trang Play).
+  const handlePlay = () => navigate("/play");
 
   const displayName =
     profile?.username || user?.email?.split("@")[0] || "Player";

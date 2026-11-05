@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { socket } from "../services/socket";
+import LocalTransport from "./LocalTransport";
 import { getMapConfig } from "./maps";
 import { readLayout, getProp } from "./mapLoader";
 import { STATION_BEHAVIORS } from "./stationBehaviors";
@@ -9,6 +10,50 @@ import itemsUrl from "../assets/items.png";
 import chefBlueUrl from "../assets/chef-blue.png";
 import chefOrangeUrl from "../assets/chef-orange.png";
 import { createGameControls } from "./gameControls";
+
+// =====================================
+// CHẾ ĐỘ CHƠI
+//
+//   single      : 1 người, chạy offline (GameController ngay trong trình duyệt)
+//   coop-local  : 2 người chung 1 bàn phím, chạy offline
+//   coop-online : 1 người mỗi máy, đi qua server (socket)
+// =====================================
+
+export const GAME_MODES = {
+  single: { offline: true, locals: ["p1"] },
+  "coop-local": { offline: true, locals: ["p1", "p2"] },
+  "coop-online": { offline: false, locals: ["p1"] },
+};
+
+// Tên phím theo Phaser.Input.Keyboard.KeyCodes
+export const KEYMAPS = {
+  p1: {
+    up: "W",
+    down: "S",
+    left: "A",
+    right: "D",
+    interact: "E",
+    drop: "Q",
+    labels: { interact: "E", drop: "Q" },
+  },
+  p2: {
+    up: "UP",
+    down: "DOWN",
+    left: "LEFT",
+    right: "RIGHT",
+    interact: "ENTER",
+    drop: "SHIFT",
+    labels: { interact: "Enter", drop: "Shift" },
+  },
+};
+
+// Chơi 1 người: cho phép dùng thêm phím mũi tên để di chuyển
+const ARROW_KEYS = { up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT" };
+
+const PLAYER_STYLE = {
+  p1: { spriteKey: "chef-blue", label: "P1", color: "#60a5fa" },
+  p2: { spriteKey: "chef-orange", label: "P2", color: "#fb923c" },
+};
 
 // Hitbox chân người chơi
 const FEET_HALF_W = 5;
@@ -156,31 +201,50 @@ function createPixelTextures(scene) {
 // GAME
 // =====================================
 
-/** Creates the Phaser scene with the current player, room and map. */
-export function createKitchenScene({ user, roomCode, mapId, ui }) {
+/**
+ * Tạo Phaser scene.
+ * @param {object} opts
+ * @param {object} opts.user      người chơi hiện tại ({ id })
+ * @param {string} opts.roomCode  mã phòng (chỉ dùng khi coop-online)
+ * @param {string} opts.mapId
+ * @param {"single"|"coop-local"|"coop-online"} opts.mode
+ * @param {object} opts.ui        { getMode, isMenuOpen, toggleMenu }
+ */
+export function createKitchenScene({
+  user,
+  roomCode,
+  mapId,
+  mode = "coop-online",
+  ui,
+}) {
   const mapCfg = getMapConfig(mapId);
+  const modeCfg = GAME_MODES[mode] ?? GAME_MODES["coop-online"];
+
+  // Phòng nội bộ cho chế độ offline
+  const roomId = modeCfg.offline ? "LOCAL" : roomCode;
+  const multiLocal = modeCfg.locals.length > 1;
+
+  const userIdFor = (slot) => (multiLocal ? `${user.id}:${slot}` : user.id);
 
   return class KitchenScene extends Phaser.Scene {
     constructor() {
       super("KitchenScene");
 
       this.mapCfg = mapCfg;
+      this.mode = mode;
 
-      this.otherPlayers = {};
+      this.net = null; // LocalTransport hoặc socket
+      this.players = []; // người điều khiển trên máy này (1 hoặc 2)
+      this.otherPlayers = {}; // người chơi từ xa (chỉ coop-online)
 
-      this.facing = "down";
+      // Co-op cùng máy: luôn nhìn toàn map nên khoá zoom
+      this.zoomLocked = multiLocal;
       this.zoomMode = "far";
-
-      this.lastSentX = null;
-      this.lastSentY = null;
 
       this.items = {};
       this.stations = {};
-      this.heldItemId = null;
 
-      this.hintSig = null;
-      this.hintWidth = 0;
-      this.pendingPlateAdd = false;
+      this.ordersOwner = null;
 
       this.score = 0;
 
@@ -194,7 +258,12 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     preload() {
       const cfg = this.mapCfg;
 
-      this.load.tilemapTiledJSON(cfg.id, cfg.mapUrl);
+      // Offline dùng file map đóng gói sẵn, online lấy từ server
+      const mapUrl = modeCfg.offline
+        ? (cfg.localMapUrl ?? cfg.mapUrl)
+        : cfg.mapUrl;
+
+      this.load.tilemapTiledJSON(cfg.id, mapUrl);
 
       if (cfg.image) {
         this.load.image(`${cfg.id}:bg`, cfg.image.url);
@@ -223,7 +292,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     applyControlMode() {
       if (this.hudZoom) {
         this.hudZoom.style.display =
-          this.controls.mode === "joystick" ? "none" : "block";
+          this.zoomLocked || this.controls.mode === "joystick"
+            ? "none"
+            : "block";
       }
     }
 
@@ -232,7 +303,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     // =====================================
 
     create() {
-      this.zoomMode = loadZoomMode();
+      this.zoomMode = this.zoomLocked ? "far" : loadZoomMode();
       createPixelTextures(this);
 
       // =================================
@@ -303,17 +374,47 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       const spawn = this.layout.spawn;
 
       // =================================
+      // NETWORK / LOCAL TRANSPORT
+      // =================================
+
+      if (modeCfg.offline) {
+        // File Tiled JSON gốc nằm trong cache của Phaser
+        const mapJson = this.cache.tilemap.get(cfg.id).data;
+
+        this.net = new LocalTransport({
+          roomCode: roomId,
+          mapId: cfg.id,
+          mapJson,
+        });
+      } else {
+        this.net = socket;
+      }
+
+      // =================================
+      // NHÂN VẬT CỦA NGƯỜI CHƠI TRÊN MÁY NÀY
+      // =================================
+
+      createChefAnims(this, "chef-blue");
+      createChefAnims(this, "chef-orange");
+
+      this.players = modeCfg.locals.map((slot, index) =>
+        this.createLocalPlayer(slot, index, spawn),
+      );
+
+      // =================================
       // HUD
       // =================================
 
       this.createHud();
 
       this.controls = createGameControls(this, {
-        onInteract: () => this.handleInteract(),
-        onDrop: () => this.dropItem(),
+        // Nút cảm ứng chỉ điều khiển người chơi 1
+        onInteract: () => this.handleInteract(this.players[0]),
+        onDrop: () => this.dropItem(this.players[0]),
         onZoom: () =>
           this.setZoomMode(this.zoomMode === "near" ? "far" : "near"),
-        getMode: ui.getMode,
+        // Co-op cùng máy: chỉ dùng bàn phím
+        getMode: () => (multiLocal ? "keyboard" : ui.getMode()),
         isMenuOpen: ui.isMenuOpen,
         onModeChange: () => this.applyControlMode(),
       });
@@ -321,27 +422,10 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
 
       this.stationBar = this.add.graphics().setDepth(7);
 
-      // =================================
-      // CURRENT PLAYER
-      // =================================
-
-      this.playerShadow = this.add
-        .image(spawn.x, spawn.y + 8, "px-shadow")
-        .setTint(0x000000)
-        .setAlpha(0.25)
-        .setDepth(4);
-
-      this.player = this.add
-        .rectangle(spawn.x, spawn.y, 12, 14, 0x2563eb)
+      // Camera đi theo 1 điểm: người chơi 1, hoặc trung điểm 2 người
+      this.camTarget = this.add
+        .rectangle(this.players[0].body.x, this.players[0].body.y, 1, 1)
         .setVisible(false);
-
-      createChefAnims(this, "chef-blue");
-      createChefAnims(this, "chef-orange");
-
-      this.playerSprite = this.add
-        .sprite(spawn.x, spawn.y + CHEF_FOOT_OFFSET, "chef-blue", 0)
-        .setOrigin(0.5, 1)
-        .setDepth(5);
 
       this.setupCamera();
 
@@ -349,25 +433,39 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       // KEYBOARD
       // =================================
 
-      this.keys = this.input.keyboard.addKeys({
-        W: Phaser.Input.Keyboard.KeyCodes.W,
-        A: Phaser.Input.Keyboard.KeyCodes.A,
-        S: Phaser.Input.Keyboard.KeyCodes.S,
-        D: Phaser.Input.Keyboard.KeyCodes.D,
+      const KC = Phaser.Input.Keyboard.KeyCodes;
+      const kb = this.input.keyboard;
+
+      this.players.forEach((p) => {
+        const km = p.keymap;
+
+        p.keys = {
+          up: kb.addKey(KC[km.up]),
+          down: kb.addKey(KC[km.down]),
+          left: kb.addKey(KC[km.left]),
+          right: kb.addKey(KC[km.right]),
+          drop: kb.addKey(KC[km.drop]),
+        };
+
+        // Chơi 1 người: thêm phím mũi tên làm phím di chuyển phụ
+        if (!multiLocal) {
+          p.altKeys = {
+            up: kb.addKey(KC[ARROW_KEYS.up]),
+            down: kb.addKey(KC[ARROW_KEYS.down]),
+            left: kb.addKey(KC[ARROW_KEYS.left]),
+            right: kb.addKey(KC[ARROW_KEYS.right]),
+          };
+        }
+
+        kb.addKey(KC[km.interact]);
+
+        kb.on(`keydown-${km.interact}`, (event) => {
+          if (event && event.repeat) return;
+          this.handleInteract(p);
+        });
       });
 
-      this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-
-      this.input.keyboard.on("keydown-E", (event) => {
-        if (event && event.repeat) return;
-        this.handleInteract();
-      });
-
-      this.dropKey = this.input.keyboard.addKey(
-        Phaser.Input.Keyboard.KeyCodes.Q,
-      );
-
-      this.input.keyboard.on("keydown-Z", (event) => {
+      kb.on("keydown-Z", (event) => {
         if (event && event.repeat) return;
         this.setZoomMode(this.zoomMode === "near" ? "far" : "near");
       });
@@ -377,24 +475,29 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
 
       // =================================
-      // SOCKET
+      // EVENTS (socket hoặc LocalTransport: cùng một giao diện)
       // =================================
 
+      const net = this.net;
+
       const on = (eventName, handler) => {
-        socket.on(eventName, handler);
+        net.on(eventName, handler);
         this.socketHandlers.push([eventName, handler]);
       };
 
-      const cleanupSocket = () => {
+      const cleanupNet = () => {
         this.socketHandlers.forEach(([eventName, handler]) => {
-          socket.off(eventName, handler);
+          net.off(eventName, handler);
         });
         this.socketHandlers = [];
         this.closeOrders();
+
+        // Local: dừng bộ đếm thời gian của game
+        if (modeCfg.offline) net.destroy();
       };
 
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupSocket);
-      this.events.once(Phaser.Scenes.Events.DESTROY, cleanupSocket);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupNet);
+      this.events.once(Phaser.Scenes.Events.DESTROY, cleanupNet);
 
       on("game-state", (state) => {
         if (!state) return;
@@ -404,7 +507,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
         });
 
         this.items = {};
-        this.heldItemId = null;
+        this.players.forEach((p) => {
+          p.heldItemId = null;
+        });
 
         if (Array.isArray(state.items)) {
           state.items.forEach((itemData) => this.upsertItem(itemData));
@@ -464,13 +569,19 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
         if (typeof score === "number") this.setScore(score);
 
         const name = order?.name || "dish";
+        const localPlayer = this.playerByUserId(who);
 
-        this.showToast(
-          who === user.id
-            ? `${name} served! +${points ?? 0}`
-            : `Teammate served ${name}! +${points ?? 0}`,
-          "#22c55e",
-        );
+        let text;
+
+        if (localPlayer && multiLocal) {
+          text = `${localPlayer.label} served ${name}! +${points ?? 0}`;
+        } else if (localPlayer) {
+          text = `${name} served! +${points ?? 0}`;
+        } else {
+          text = `Teammate served ${name}! +${points ?? 0}`;
+        }
+
+        this.showToast(text, "#22c55e");
       });
 
       on("interaction-error", ({ message }) => {
@@ -479,12 +590,12 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
 
       on("player-position", ({ userId, x, y, t }) => {
-        if (userId === user.id) return;
+        if (this.playerByUserId(userId)) return;
         this.updateOtherPlayer(userId, x, y, t);
       });
 
       on("player-joined", ({ userId }) => {
-        if (userId === user.id) return;
+        if (this.playerByUserId(userId)) return;
         console.log("Player joined:", userId);
       });
 
@@ -499,20 +610,107 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
 
       on("disconnect", () => {
-        this.heldItemId = null;
+        this.players.forEach((p) => {
+          p.heldItemId = null;
+        });
       });
 
       const joinRoom = () => {
-        socket.emit("join-room", { roomCode, userId: user.id, mapId });
+        net.emit("join-room", {
+          roomCode: roomId,
+          userId: this.players[0].userId,
+          mapId,
+        });
       };
 
       on("connect", joinRoom);
 
-      if (!socket.connected) {
-        socket.connect();
+      if (!net.connected) {
+        net.connect();
       } else {
         joinRoom();
       }
+    }
+
+    // =====================================
+    // NGƯỜI CHƠI CỤC BỘ
+    // =====================================
+
+    createLocalPlayer(slot, index, spawn) {
+      const style = PLAYER_STYLE[slot];
+      const pos = this.findSpawnFor(index, spawn);
+
+      const shadow = this.add
+        .image(pos.x, pos.y + 8, "px-shadow")
+        .setTint(0x000000)
+        .setAlpha(0.25)
+        .setDepth(4);
+
+      // Hình chữ nhật ẩn: giữ toạ độ logic (x, y) của người chơi
+      const body = this.add
+        .rectangle(pos.x, pos.y, 12, 14, 0x2563eb)
+        .setVisible(false);
+
+      const sprite = this.add
+        .sprite(pos.x, pos.y + CHEF_FOOT_OFFSET, style.spriteKey, 0)
+        .setOrigin(0.5, 1)
+        .setDepth(5);
+
+      return {
+        slot,
+        index,
+        userId: userIdFor(slot),
+        keymap: KEYMAPS[slot],
+        label: style.label,
+        color: style.color,
+        spriteKey: style.spriteKey,
+
+        body,
+        sprite,
+        shadow,
+
+        facing: "down",
+        heldItemId: null,
+        heldItemVisual: null,
+        pendingPlateAdd: false,
+
+        keys: null,
+        altKeys: null,
+
+        lastSentX: null,
+        lastSentY: null,
+        lastSentAt: 0,
+
+        hudHint: null,
+        hudHintVisible: false,
+        hintSig: null,
+      };
+    }
+
+    // Người thứ 2 đứng cạnh người thứ nhất (không đè lên, không vào tường)
+    findSpawnFor(index, spawn) {
+      if (index === 0) return { x: spawn.x, y: spawn.y };
+
+      const offsets = [
+        [14, 0],
+        [-14, 0],
+        [0, 14],
+        [0, -14],
+        [10, 10],
+        [-10, 10],
+      ];
+
+      for (const [ox, oy] of offsets) {
+        if (!this.isBlocked(spawn.x + ox, spawn.y + oy)) {
+          return { x: spawn.x + ox, y: spawn.y + oy };
+        }
+      }
+
+      return { x: spawn.x, y: spawn.y };
+    }
+
+    playerByUserId(userId) {
+      return this.players.find((p) => p.userId === userId) || null;
     }
 
     // =====================================
@@ -559,19 +757,29 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
     }
 
-    blockedByOtherPlayer(x, y) {
-      return Object.values(this.otherPlayers).some((other) => {
-        const newDx = Math.abs(x - other.curX);
-        const newDy = Math.abs(y - other.curY);
+    // Va chạm với người chơi khác: người ở xa (online) + người cùng máy
+    blockedByOthers(p, x, y) {
+      const others = [
+        ...Object.values(this.otherPlayers).map((o) => ({
+          x: o.curX,
+          y: o.curY,
+        })),
+        ...this.players
+          .filter((q) => q !== p)
+          .map((q) => ({ x: q.body.x, y: q.body.y })),
+      ];
+
+      return others.some((other) => {
+        const newDx = Math.abs(x - other.x);
+        const newDy = Math.abs(y - other.y);
 
         if (newDx >= PLAYER_BLOCK_W || newDy >= PLAYER_BLOCK_H) {
           return false;
         }
 
-        const nowDist = Math.hypot(
-          this.player.x - other.curX,
-          this.player.y - other.curY,
-        );
+        // Chỉ chặn nếu bước này làm 2 người lại gần nhau hơn
+        // (đang kẹt chồng lên nhau thì vẫn được đi ra)
+        const nowDist = Math.hypot(p.body.x - other.x, p.body.y - other.y);
 
         return Math.hypot(newDx, newDy) < nowDist;
       });
@@ -606,11 +814,14 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       item.x = itemData.x;
       item.y = itemData.y;
 
-      if (item.state === "held" && item.userId === user.id) {
-        this.heldItemId = item.id;
-      } else if (this.heldItemId === item.id) {
-        this.heldItemId = null;
-      }
+      // Món này đang nằm trong tay người chơi nào trên máy này?
+      const owner =
+        item.state === "held" ? this.playerByUserId(item.userId) : null;
+
+      this.players.forEach((p) => {
+        if (p === owner) p.heldItemId = item.id;
+        else if (p.heldItemId === item.id) p.heldItemId = null;
+      });
 
       item.sprite.setFrame(itemFrame(item.type, item.status, item.ingredients));
 
@@ -637,7 +848,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
 
       delete this.items[itemId];
 
-      if (this.heldItemId === itemId) this.heldItemId = null;
+      this.players.forEach((p) => {
+        if (p.heldItemId === itemId) p.heldItemId = null;
+      });
     }
 
     setScore(value) {
@@ -684,6 +897,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     }
 
     setZoomMode(mode) {
+      // Co-op cùng máy: luôn thấy cả 2 người nên không cho zoom gần
+      if (this.zoomLocked) return;
+
       if (mode === this.zoomMode) return;
 
       this.zoomMode = mode;
@@ -704,13 +920,26 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       }
     }
 
+    updateCameraTarget() {
+      const [a, b] = this.players;
+
+      if (!b) {
+        this.camTarget.x = a.body.x;
+        this.camTarget.y = a.body.y;
+        return;
+      }
+
+      this.camTarget.x = (a.body.x + b.body.x) / 2;
+      this.camTarget.y = (a.body.y + b.body.y) / 2;
+    }
+
     setupCamera() {
       const cam = this.cameras.main;
 
       cam.setBackgroundColor(this.mapCfg.background);
       cam.setBounds(0, 0, this.worldW, this.worldH);
       cam.setZoom(this.computeZoom());
-      cam.startFollow(this.player, true, CAMERA_LERP, CAMERA_LERP);
+      cam.startFollow(this.camTarget, true, CAMERA_LERP, CAMERA_LERP);
 
       const onResize = () => cam.setZoom(this.computeZoom());
       this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
@@ -747,16 +976,20 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       };
 
       this.hudRoot = root;
-      this.hudHintVisible = false;
 
       this.hudScore = make(
         "background:#12302e;border-radius:.4em;padding:.2em .8em;transform:translate(-50%,-50%);",
       );
       this.hudScore.textContent = `SCORE  ${this.score}`;
 
-      this.hudHint = make(
-        "display:none;background:rgba(18,48,46,.95);border-radius:.6em;padding:.35em .6em;transform:translate(-50%,-100%);",
-      );
+      // Mỗi người chơi có một bong bóng gợi ý riêng
+      this.players.forEach((p) => {
+        p.hudHint = make(
+          "display:none;background:rgba(18,48,46,.95);border-radius:.6em;padding:.35em .6em;transform:translate(-50%,-100%);",
+        );
+        p.hudHintVisible = false;
+        p.hintSig = null;
+      });
 
       this.hudZoom = make(
         "background:rgba(18,48,46,.85);border-radius:.4em;padding:.2em .6em;font-size:.8em;transform:translate(-100%,-100%);",
@@ -817,18 +1050,20 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       this.hudZoom.style.left = `${rect.right - fs}px`;
       this.hudZoom.style.top = `${rect.bottom - fs}px`;
 
-      if (this.hudHintVisible) {
-        const w = this.hudHint.offsetWidth;
+      this.players.forEach((p) => {
+        if (!p.hudHintVisible) return;
+
+        const w = p.hudHint.offsetWidth;
 
         const x = Phaser.Math.Clamp(
-          sx(this.player.x),
+          sx(p.body.x),
           rect.left + w / 2 + 4,
           rect.right - w / 2 - 4,
         );
 
-        this.hudHint.style.left = `${x}px`;
-        this.hudHint.style.top = `${Math.max(sy(this.player.y - 13), rect.top + fs * 3)}px`;
-      }
+        p.hudHint.style.left = `${x}px`;
+        p.hudHint.style.top = `${Math.max(sy(p.body.y - 13), rect.top + fs * 3)}px`;
+      });
 
       this.stationDefs.forEach((cfg) => {
         const label = this.stationLabels[cfg.id];
@@ -840,24 +1075,32 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
     }
 
-    setHint(entries) {
+    setHint(p, entries) {
       const sig = entries
         ? entries.map((e) => `${e.key}:${e.label}`).join("|")
         : "";
 
-      if (sig === this.hintSig) return;
+      if (sig === p.hintSig) return;
 
-      this.hintSig = sig;
+      p.hintSig = sig;
 
-      const box = this.hudHint;
+      const box = p.hudHint;
       if (!box) return;
 
       box.textContent = "";
 
       if (!entries || entries.length === 0) {
         box.style.display = "none";
-        this.hudHintVisible = false;
+        p.hudHintVisible = false;
         return;
+      }
+
+      // Co-op cùng máy: thêm nhãn P1 / P2 để biết bong bóng của ai
+      if (multiLocal) {
+        const tag = document.createElement("span");
+        tag.textContent = p.label;
+        tag.style.cssText = `display:inline-block;margin-right:.6em;color:${p.color};`;
+        box.appendChild(tag);
       }
 
       entries.forEach((e, i) => {
@@ -884,11 +1127,11 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       box.appendChild(arrow);
 
       box.style.display = "block";
-      this.hudHintVisible = true;
+      p.hudHintVisible = true;
     }
 
     // =====================================
-    // OTHER PLAYERS
+    // OTHER PLAYERS (chỉ coop-online)
     // =====================================
 
     updateOtherPlayer(userId, x, y, t) {
@@ -951,20 +1194,18 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     // INTERACTION
     // =====================================
 
-    distanceTo(x, y) {
-      return Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y);
+    distanceTo(p, x, y) {
+      return Phaser.Math.Distance.Between(p.body.x, p.body.y, x, y);
     }
 
-    findNearbyItem() {
-      if (!this.player) return null;
-
+    findNearbyItem(p) {
       let closest = null;
       let closestDistance = Infinity;
 
       Object.values(this.items).forEach((item) => {
         if (item.state !== "available") return;
 
-        const distance = this.distanceTo(item.x, item.y);
+        const distance = this.distanceTo(p, item.x, item.y);
 
         if (distance <= PICKUP_RANGE && distance < closestDistance) {
           closest = item;
@@ -1097,7 +1338,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       });
 
       const foot = document.createElement("div");
-      foot.textContent = "Press E or ESC to close";
+      foot.textContent = multiLocal
+        ? "Press E / Enter or ESC to close"
+        : "Press E or ESC to close";
       foot.style.cssText =
         "margin-top:10px;font-size:12px;color:#94a3b8;text-align:right;";
       el.appendChild(foot);
@@ -1113,6 +1356,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
         this.ordersEl.remove();
         this.ordersEl = null;
       }
+
+      this.ordersOwner = null;
+
       document
         .querySelectorAll("[data-orders-panel]")
         .forEach((n) => n.remove());
@@ -1138,8 +1384,10 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       window.setTimeout(() => el.remove(), 2300);
     }
 
-    findInteraction() {
-      if (!this.player) return null;
+    // Hành động người chơi p có thể làm ngay lúc này (hoặc null)
+    findInteraction(p) {
+      const px = p.body.x;
+      const py = p.body.y;
 
       const special = this.layout.stations.filter((s) =>
         ["trash-bin", "order-station", "serving-counter"].includes(s.kind),
@@ -1148,7 +1396,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       let specialBest = null;
 
       for (const station of special) {
-        const d = this.distanceTo(station.x, station.y);
+        const d = this.distanceTo(p, station.x, station.y);
 
         if (d > INTERACT_RANGE) continue;
 
@@ -1164,37 +1412,39 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
               return;
             }
 
-            socket.emit("request-orders", {
-              roomCode,
-              playerX: this.player.x,
-              playerY: this.player.y,
+            this.ordersOwner = p;
+
+            this.net.emit("request-orders", {
+              roomCode: roomId,
+              playerX: p.body.x,
+              playerY: p.body.y,
             });
           };
-        } else if (station.kind === "trash-bin" && this.heldItemId) {
+        } else if (station.kind === "trash-bin" && p.heldItemId) {
           label = "Throw item away";
 
           run = () =>
-            socket.emit("use-trash-bin", {
-              roomCode,
-              userId: user.id,
-              itemId: this.heldItemId,
-              playerX: this.player.x,
-              playerY: this.player.y,
+            this.net.emit("use-trash-bin", {
+              roomCode: roomId,
+              userId: p.userId,
+              itemId: p.heldItemId,
+              playerX: p.body.x,
+              playerY: p.body.y,
             });
         } else if (
           station.kind === "serving-counter" &&
-          this.heldItemId &&
-          this.items[this.heldItemId]?.type === "plate"
+          p.heldItemId &&
+          this.items[p.heldItemId]?.type === "plate"
         ) {
           label = "Serve dish";
 
           run = () =>
-            socket.emit("serve-order", {
-              roomCode,
-              userId: user.id,
-              itemId: this.heldItemId,
-              playerX: this.player.x,
-              playerY: this.player.y,
+            this.net.emit("serve-order", {
+              roomCode: roomId,
+              userId: p.userId,
+              itemId: p.heldItemId,
+              playerX: p.body.x,
+              playerY: p.body.y,
             });
         }
 
@@ -1208,8 +1458,8 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       // ---------------------------------
       // ĐANG CẦM ITEM
       // ---------------------------------
-      if (this.heldItemId) {
-        const held = this.items[this.heldItemId];
+      if (p.heldItemId) {
+        const held = this.items[p.heldItemId];
 
         if (!held) return null;
 
@@ -1229,7 +1479,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
             continue;
           }
 
-          const d = this.distanceTo(cfg.x, cfg.y);
+          const d = this.distanceTo(p, cfg.x, cfg.y);
 
           if (d > INTERACT_RANGE) continue;
 
@@ -1237,7 +1487,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
             best = {
               d,
               label: cfg.placeLabel,
-              run: () => this.placeOnStation(cfg.id),
+              run: () => this.placeOnStation(p, cfg.id),
             };
           }
         }
@@ -1252,7 +1502,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
               best = {
                 d,
                 label,
-                run: () => this.addToHeldPlate(source),
+                run: () => this.addToHeldPlate(p, source),
               };
             }
           };
@@ -1262,7 +1512,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
             if (item.type === "plate" || item.state !== "available") return;
 
             offer(
-              this.distanceTo(item.x, item.y),
+              this.distanceTo(p, item.x, item.y),
               `Add ${item.status !== "raw" ? item.status + " " : ""}${item.type} to plate`,
               { type: "floor", id: item.id },
             );
@@ -1278,7 +1528,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
             if (!["chopped", "cooked"].includes(item.status)) return;
 
             offer(
-              this.distanceTo(cfg.x, cfg.y),
+              this.distanceTo(p, cfg.x, cfg.y),
               `Add ${item.status} ${item.type} to plate`,
               { type: "station", id: cfg.id },
             );
@@ -1287,7 +1537,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
           // 3) Lấy thẳng từ kệ nguyên liệu bỏ vào đĩa
           this.layout.shelves.forEach((shelf) => {
             offer(
-              this.distanceTo(shelf.x, shelf.y),
+              this.distanceTo(p, shelf.x, shelf.y),
               `Add ${shelf.type} to plate`,
               { type: "shelf", id: shelf.id },
             );
@@ -1298,7 +1548,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
           Object.values(this.items).forEach((item) => {
             if (item.type !== "plate" || item.state !== "available") return;
 
-            const d = this.distanceTo(item.x, item.y);
+            const d = this.distanceTo(p, item.x, item.y);
 
             if (d > INTERACT_RANGE) return;
 
@@ -1306,7 +1556,7 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
               best = {
                 d,
                 label: "Add to plate",
-                run: () => this.addIngredientToPlate(item.id),
+                run: () => this.addIngredientToPlate(p, item.id),
               };
             }
           });
@@ -1319,12 +1569,12 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       // TAY TRỐNG
       // ---------------------------------
 
-      const floorItem = this.findNearbyItem();
+      const floorItem = this.findNearbyItem(p);
 
       if (floorItem) {
         return {
           label: `Pick up ${floorItem.type}`,
-          run: () => this.pickUpItem(floorItem.id),
+          run: () => this.pickUpItem(p, floorItem.id),
         };
       }
 
@@ -1349,9 +1599,9 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
         if (!["idle", "paused"].includes(station.cutState)) return;
 
         consider(
-          this.distanceTo(cfg.x, cfg.y),
+          this.distanceTo(p, cfg.x, cfg.y),
           station.cutState === "paused" ? "Resume chopping" : "Chop",
-          () => this.startCutting(cfg.id),
+          () => this.startCutting(p, cfg.id),
         );
       });
 
@@ -1369,123 +1619,116 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
 
         if (!item) return;
 
-        consider(this.distanceTo(cfg.x, cfg.y), takeLabel(item), () =>
-          this.takeFromStation(cfg.id),
+        consider(this.distanceTo(p, cfg.x, cfg.y), takeLabel(item), () =>
+          this.takeFromStation(p, cfg.id),
         );
       });
 
       if (this.plateStation) {
         consider(
-          this.distanceTo(this.plateStation.x, this.plateStation.y),
+          this.distanceTo(p, this.plateStation.x, this.plateStation.y),
           "Take plate",
-          () => this.takePlate(),
+          () => this.takePlate(p),
         );
       }
 
       this.layout.shelves.forEach((shelf) => {
-        consider(this.distanceTo(shelf.x, shelf.y), `Take ${shelf.type}`, () =>
-          this.takeIngredientFromShelf(shelf),
+        consider(
+          this.distanceTo(p, shelf.x, shelf.y),
+          `Take ${shelf.type}`,
+          () => this.takeIngredientFromShelf(p, shelf),
         );
       });
 
       return best;
     }
-    handleInteract() {
-      if (this.controls?.menuOpen) return;
 
-      // Bảng order đang mở: E luôn đóng được, không phụ thuộc khoảng cách
+    handleInteract(p) {
+      if (!p || this.controls?.menuOpen) return;
+
+      // Bảng order đang mở: bấm interact luôn đóng được, không phụ thuộc khoảng cách
       if (this.ordersEl) {
         this.closeOrders();
         return;
       }
 
-      const action = this.findInteraction();
-
-      console.log(
-        "E tại",
-        Math.round(this.player.x),
-        Math.round(this.player.y),
-        "| held:",
-        this.heldItemId,
-        "| hành động:",
-        action ? action.label : "KHÔNG CÓ",
-      );
+      const action = this.findInteraction(p);
 
       if (action) action.run();
     }
 
     // =====================================
-    // ACTIONS (emit lên server)
+    // ACTIONS (gửi lệnh qua this.net: server hoặc local)
     // =====================================
 
-    takeIngredientFromShelf(shelf) {
-      if (!this.player || this.heldItemId) return;
+    takeIngredientFromShelf(p, shelf) {
+      if (p.heldItemId) return;
 
-      socket.emit("take-ingredient", {
-        roomCode,
-        userId: user.id,
+      this.net.emit("take-ingredient", {
+        roomCode: roomId,
+        userId: p.userId,
         shelfId: shelf.id,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    takePlate() {
-      if (!this.player || this.heldItemId) return;
+    takePlate(p) {
+      if (p.heldItemId) return;
 
-      socket.emit("take-plate", {
-        roomCode,
-        userId: user.id,
-        playerX: this.player.x,
-        playerY: this.player.y,
+      this.net.emit("take-plate", {
+        roomCode: roomId,
+        userId: p.userId,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    pickUpItem(itemId) {
-      if (!itemId || this.heldItemId) return;
+    pickUpItem(p, itemId) {
+      if (!itemId || p.heldItemId) return;
 
-      socket.emit("pick-up-item", {
-        roomCode,
-        userId: user.id,
+      this.net.emit("pick-up-item", {
+        roomCode: roomId,
+        userId: p.userId,
         itemId,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    placeOnStation(stationId) {
-      if (!this.heldItemId) return;
+    placeOnStation(p, stationId) {
+      if (!p.heldItemId) return;
 
-      socket.emit("place-on-station", {
-        roomCode,
-        userId: user.id,
+      this.net.emit("place-on-station", {
+        roomCode: roomId,
+        userId: p.userId,
         stationId,
-        itemId: this.heldItemId,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        itemId: p.heldItemId,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    takeFromStation(stationId) {
-      if (this.heldItemId) return;
+    takeFromStation(p, stationId) {
+      if (p.heldItemId) return;
 
-      socket.emit("take-from-station", {
-        roomCode,
-        userId: user.id,
+      this.net.emit("take-from-station", {
+        roomCode: roomId,
+        userId: p.userId,
         stationId,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
     // Người chơi nhích đi -> thanh thái đứng ngay (server cũng pause ngay)
-    freezeMyCutting() {
+    freezeCutting(p) {
       for (const cfg of this.stationDefs) {
         if (!cfg.chop) continue;
 
         const st = this.stations[cfg.id];
 
-        if (!st || st.cutState !== "cutting" || st.cuttingUserId !== user.id) {
+        if (!st || st.cutState !== "cutting" || st.cuttingUserId !== p.userId) {
           continue;
         }
 
@@ -1495,68 +1738,71 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
       }
     }
 
-    startCutting(stationId) {
-      if (this.heldItemId) return;
+    startCutting(p, stationId) {
+      if (p.heldItemId) return;
 
-      socket.emit("start-cutting", {
-        roomCode,
-        userId: user.id,
+      this.net.emit("start-cutting", {
+        roomCode: roomId,
+        userId: p.userId,
         stationId,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    addIngredientToPlate(plateId) {
-      if (!this.heldItemId || this.pendingPlateAdd) return;
+    // Khoá thao tác thêm nguyên liệu 400ms (riêng từng người) để không gửi lệnh trùng
+    lockPlateAdd(p) {
+      p.pendingPlateAdd = true;
 
-      this.pendingPlateAdd = true;
       this.time.delayedCall(400, () => {
-        this.pendingPlateAdd = false;
+        p.pendingPlateAdd = false;
       });
+    }
 
-      socket.emit("add-ingredient-to-plate", {
-        roomCode,
-        userId: user.id,
+    addIngredientToPlate(p, plateId) {
+      if (!p.heldItemId || p.pendingPlateAdd) return;
+
+      this.lockPlateAdd(p);
+
+      this.net.emit("add-ingredient-to-plate", {
+        roomCode: roomId,
+        userId: p.userId,
         plateId,
-        itemId: this.heldItemId,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        itemId: p.heldItemId,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
     // Thêm nguyên liệu (dưới đất / trên trạm / ở kệ) vào đĩa đang cầm
-    addToHeldPlate(source) {
-      if (!this.heldItemId || this.pendingPlateAdd) return;
+    addToHeldPlate(p, source) {
+      if (!p.heldItemId || p.pendingPlateAdd) return;
 
-      const plate = this.items[this.heldItemId];
+      const plate = this.items[p.heldItemId];
       if (!plate || plate.type !== "plate") return;
 
-      this.pendingPlateAdd = true;
-      this.time.delayedCall(400, () => {
-        this.pendingPlateAdd = false;
-      });
+      this.lockPlateAdd(p);
 
-      socket.emit("add-to-held-plate", {
-        roomCode,
-        userId: user.id,
-        plateId: this.heldItemId,
+      this.net.emit("add-to-held-plate", {
+        roomCode: roomId,
+        userId: p.userId,
+        plateId: p.heldItemId,
         sourceType: source.type,
         sourceId: source.id,
-        playerX: this.player.x,
-        playerY: this.player.y,
+        playerX: p.body.x,
+        playerY: p.body.y,
       });
     }
 
-    dropItem() {
-      if (!this.heldItemId) return;
+    dropItem(p) {
+      if (!p || !p.heldItemId) return;
 
-      socket.emit("drop-item", {
-        roomCode,
-        userId: user.id,
-        itemId: this.heldItemId,
-        x: this.player.x,
-        y: this.player.y,
+      this.net.emit("drop-item", {
+        roomCode: roomId,
+        userId: p.userId,
+        itemId: p.heldItemId,
+        x: p.body.x,
+        y: p.body.y,
       });
     }
 
@@ -1611,25 +1857,28 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     // NHÂN VẬT: vị trí + animation
     // =====================================
 
-    updateChefSprites(dx, dy) {
-      if (!this.playerSprite) return;
-
+    updatePlayerSprite(p, dx, dy) {
       const moving = dx !== 0 || dy !== 0;
 
-      this.facing = chefFacing(dx, dy, this.facing);
+      p.facing = chefFacing(dx, dy, p.facing);
 
-      if (moving && this.facing === "side") {
-        this.playerSprite.setFlipX(dx > 0);
+      if (moving && p.facing === "side") {
+        p.sprite.setFlipX(dx > 0);
       }
 
-      this.playerSprite.x = Math.round(this.player.x);
-      this.playerSprite.y = Math.round(this.player.y + CHEF_FOOT_OFFSET);
+      p.sprite.x = Math.round(p.body.x);
+      p.sprite.y = Math.round(p.body.y + CHEF_FOOT_OFFSET);
 
-      this.playerSprite.anims.play(
-        `chef-blue-${moving ? "walk" : "idle"}-${this.facing}`,
+      p.shadow.x = p.body.x;
+      p.shadow.y = p.body.y + 8;
+
+      p.sprite.anims.play(
+        `${p.spriteKey}-${moving ? "walk" : "idle"}-${p.facing}`,
         true,
       );
+    }
 
+    updateOtherPlayers() {
       Object.values(this.otherPlayers).forEach((other) => {
         const buf = other.samples;
 
@@ -1679,26 +1928,27 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     // POSITION
     // =====================================
 
-    sendPosition() {
-      if (!socket.connected) return;
+    // Gửi vị trí để server / GameController kiểm tra khoảng cách (thớt thái...)
+    sendPosition(p) {
+      if (!this.net.connected) return;
 
-      const x = Math.round(this.player.x);
-      const y = Math.round(this.player.y);
+      const x = Math.round(p.body.x);
+      const y = Math.round(p.body.y);
 
-      if (x === this.lastSentX && y === this.lastSentY) return;
+      if (x === p.lastSentX && y === p.lastSentY) return;
 
       const nowMs = performance.now();
 
-      if (nowMs - (this.lastSentAt || 0) < POSITION_SEND_INTERVAL) return;
+      if (nowMs - p.lastSentAt < POSITION_SEND_INTERVAL) return;
 
-      this.lastSentAt = nowMs;
+      p.lastSentAt = nowMs;
 
-      this.lastSentX = x;
-      this.lastSentY = y;
+      p.lastSentX = x;
+      p.lastSentY = y;
 
-      socket.volatile.emit("player-position", {
-        roomCode,
-        userId: user.id,
+      this.net.volatile.emit("player-position", {
+        roomCode: roomId,
+        userId: p.userId,
         x,
         y,
         t: Date.now(),
@@ -1709,123 +1959,159 @@ export function createKitchenScene({ user, roomCode, mapId, ui }) {
     // UPDATE
     // =====================================
 
-    update(time, delta) {
-      this.controls.sync();
+    // Đọc phím di chuyển của một người chơi -> vector (dx, dy)
+    readMoveInput(p, stick) {
+      if (stick) return { dx: stick.x, dy: stick.y };
 
-      const stick = this.controls.getVector();
+      const k = p.keys;
+      const alt = p.altKeys; // phím mũi tên phụ (chỉ khi chơi 1 người)
 
-      let dx = (this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0);
-      let dy = (this.keys.S.isDown ? 1 : 0) - (this.keys.W.isDown ? 1 : 0);
+      const left = k.left.isDown || alt?.left.isDown;
+      const right = k.right.isDown || alt?.right.isDown;
+      const up = k.up.isDown || alt?.up.isDown;
+      const downKey = k.down.isDown || alt?.down.isDown;
 
-      if (stick) {
-        dx = stick.x;
-        dy = stick.y;
-      } else if (dx !== 0 && dy !== 0) {
+      let dx = (right ? 1 : 0) - (left ? 1 : 0);
+      let dy = (downKey ? 1 : 0) - (up ? 1 : 0);
+
+      if (dx !== 0 && dy !== 0) {
         dx *= Math.SQRT1_2;
         dy *= Math.SQRT1_2;
       }
 
-      if (this.controls.menuOpen) {
-        dx = 0;
-        dy = 0;
-      }
+      return { dx, dy };
+    }
 
+    update(time, delta) {
+      this.controls.sync();
+
+      const stick = this.controls.getVector();
       const step = PLAYER_SPEED * (delta / 1000);
 
-      const beforeX = this.player.x;
-      const beforeY = this.player.y;
+      this.players.forEach((p, index) => {
+        // Joystick cảm ứng chỉ điều khiển người chơi 1
+        let { dx, dy } = this.readMoveInput(p, index === 0 ? stick : null);
 
-      const nextX = this.player.x + dx * step;
-
-      if (
-        !this.isBlocked(nextX, this.player.y) &&
-        !this.blockedByOtherPlayer(nextX, this.player.y)
-      ) {
-        this.player.x = nextX;
-      }
-
-      const nextY = this.player.y + dy * step;
-
-      if (
-        !this.isBlocked(this.player.x, nextY) &&
-        !this.blockedByOtherPlayer(this.player.x, nextY)
-      ) {
-        this.player.y = nextY;
-      }
-
-      if (this.player.x !== beforeX || this.player.y !== beforeY) {
-        this.freezeMyCutting();
-      }
-
-      this.playerShadow.x = this.player.x;
-      this.playerShadow.y = this.player.y + 8;
-
-      this.updateChefSprites(dx, dy);
-
-      this.sendPosition();
-
-      if (this.heldItemId && !this.items[this.heldItemId]) {
-        this.heldItemId = null;
-      }
-
-      const heldItem = this.heldItemId ? this.items[this.heldItemId] : null;
-
-      const hint = [];
-
-      const action = this.findInteraction();
-
-      this.controls.setActionLabel(action ? action.label : null);
-      this.controls.setDropItem(heldItem ? heldItem.type : null);
-
-      if (action) {
-        hint.push({ key: "E", label: action.label });
-      }
-
-      if (heldItem) {
-        if (Phaser.Input.Keyboard.JustDown(this.dropKey)) {
-          this.dropItem();
+        if (this.controls.menuOpen) {
+          dx = 0;
+          dy = 0;
         }
 
-        hint.push({ key: "Q", label: `Drop ${heldItem.type}` });
+        const beforeX = p.body.x;
+        const beforeY = p.body.y;
 
-        if (!this.heldItemVisual) {
-          this.heldItemVisual = this.add
-            .image(this.player.x, this.player.y, "items", 0)
-            .setDepth(6);
+        const nextX = p.body.x + dx * step;
+
+        if (
+          !this.isBlocked(nextX, p.body.y) &&
+          !this.blockedByOthers(p, nextX, p.body.y)
+        ) {
+          p.body.x = nextX;
         }
 
-        this.heldItemVisual.setFrame(
-          itemFrame(heldItem.type, heldItem.status, heldItem.ingredients),
-        );
+        const nextY = p.body.y + dy * step;
 
-        if (heldItem.type === "plate") {
-          applyBakeTint(this.heldItemVisual, heldItem.bakeStatus);
-        } else {
-          this.heldItemVisual.clearTint();
+        if (
+          !this.isBlocked(p.body.x, nextY) &&
+          !this.blockedByOthers(p, p.body.x, nextY)
+        ) {
+          p.body.y = nextY;
         }
 
-        const hold = heldItemOffset(this.facing, this.playerSprite.flipX);
+        if (p.body.x !== beforeX || p.body.y !== beforeY) {
+          this.freezeCutting(p);
+        }
 
-        this.heldItemVisual.setDepth(hold.depth);
-        this.heldItemVisual.x = this.player.x + hold.x;
-        this.heldItemVisual.y = this.player.y + hold.y;
-      } else if (this.heldItemVisual) {
-        this.heldItemVisual.destroy();
-        this.heldItemVisual = null;
-      }
+        this.updatePlayerSprite(p, dx, dy);
 
+        this.sendPosition(p);
+
+        this.updatePlayerHold(p, index);
+      });
+
+      this.updateCameraTarget();
+      this.updateOtherPlayers();
+
+      // Bảng order: đóng khi người đã mở nó đi xa
       if (this.ordersEl) {
         const os = this.layout.stations.find(
           (st) => st.kind === "order-station",
         );
 
-        if (!os || this.distanceTo(os.x, os.y) > INTERACT_RANGE * 1.6) {
+        const owner = this.ordersOwner || this.players[0];
+
+        if (!os || this.distanceTo(owner, os.x, os.y) > INTERACT_RANGE * 1.6) {
           this.closeOrders();
         }
       }
 
       this.updateStationViews();
-      this.setHint(this.controls.mode === "joystick" ? [] : hint);
+    }
+
+    // Đồ đang cầm + gợi ý phím + phím thả của một người chơi
+    updatePlayerHold(p, index) {
+      if (p.heldItemId && !this.items[p.heldItemId]) {
+        p.heldItemId = null;
+      }
+
+      const heldItem = p.heldItemId ? this.items[p.heldItemId] : null;
+
+      // Luôn đọc phím thả mỗi khung hình để không bị "tồn" lần bấm cũ
+      const dropPressed = Phaser.Input.Keyboard.JustDown(p.keys.drop);
+
+      const hint = [];
+
+      const action = this.findInteraction(p);
+
+      // Nút cảm ứng (E / Q) chỉ phản ánh người chơi 1
+      if (index === 0) {
+        this.controls.setActionLabel(action ? action.label : null);
+        this.controls.setDropItem(heldItem ? heldItem.type : null);
+      }
+
+      if (action) {
+        hint.push({ key: p.keymap.labels.interact, label: action.label });
+      }
+
+      if (heldItem) {
+        if (dropPressed && !this.controls.menuOpen) {
+          this.dropItem(p);
+        }
+
+        hint.push({
+          key: p.keymap.labels.drop,
+          label: `Drop ${heldItem.type}`,
+        });
+
+        if (!p.heldItemVisual) {
+          p.heldItemVisual = this.add
+            .image(p.body.x, p.body.y, "items", 0)
+            .setDepth(6);
+        }
+
+        p.heldItemVisual.setFrame(
+          itemFrame(heldItem.type, heldItem.status, heldItem.ingredients),
+        );
+
+        if (heldItem.type === "plate") {
+          applyBakeTint(p.heldItemVisual, heldItem.bakeStatus);
+        } else {
+          p.heldItemVisual.clearTint();
+        }
+
+        const hold = heldItemOffset(p.facing, p.sprite.flipX);
+
+        p.heldItemVisual.setDepth(hold.depth);
+        p.heldItemVisual.x = p.body.x + hold.x;
+        p.heldItemVisual.y = p.body.y + hold.y;
+      } else if (p.heldItemVisual) {
+        p.heldItemVisual.destroy();
+        p.heldItemVisual = null;
+      }
+
+      const hideHint = index === 0 && this.controls.mode === "joystick";
+
+      this.setHint(p, hideHint ? [] : hint);
     }
   };
 }
