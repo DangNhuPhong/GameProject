@@ -36,17 +36,17 @@ export const createMatch = async (req, res) => {
       .eq("id", user_id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      console.error("createMatch: profile lookup failed:", {
-        user_id,
-        found: Boolean(profile),
-        profileError,
-      });
+    if (profileError) {
+      console.error("createMatch: profile lookup error:", profileError);
+      return res
+        .status(500)
+        .json({ success: false, message: profileError.message });
+    }
 
-      return res.status(404).json({
-        success: false,
-        message: "User profile not found",
-      });
+    if (!profile) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User profile not found" });
     }
 
     let roomCode;
