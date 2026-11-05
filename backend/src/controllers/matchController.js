@@ -36,17 +36,22 @@ export const createMatch = async (req, res) => {
       .eq("id", user_id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error("createMatch: profile lookup error:", profileError);
-      return res
-        .status(500)
-        .json({ success: false, message: profileError.message });
-    }
+    if (profileError || !profile) {
+      const { count } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true });
 
-    if (!profile) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User profile not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+        debug: {
+          user_id,
+          found: Boolean(profile),
+          profileError,
+          totalProfilesVisibleToServer: count,
+          supabaseHost: new URL(process.env.SUPABASE_URL).host,
+        },
+      });
     }
 
     let roomCode;
