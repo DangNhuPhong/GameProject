@@ -2,8 +2,8 @@ import "dotenv/config";
 import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
-import GameController from "./classes/GameController.js";
-import { getMapLayout } from "./maps/index.js";
+import { controller } from "./classes/gameRuntime.js";
+import { supabase } from "./config/supabase.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -35,8 +35,6 @@ const io = new Server(server, {
 // Single / Co-op cùng máy (frontend/src/game/core/GameController.js).
 // ==========================================
 
-const controller = new GameController({ getLayout: getMapLayout });
-
 const toRoom = (roomCode, event, data) => io.to(roomCode).emit(event, data);
 
 // ==========================================
@@ -64,7 +62,10 @@ io.on("connection", (socket) => {
   const handle = (eventName, fn) => {
     socket.on(eventName, (payload) => {
       try {
-        fn(payload || {});
+        Promise.resolve(fn(payload || {})).catch((err) => {
+          console.error(`Async error in ${eventName}:`, err);
+          socket.emit("interaction-error", { message: "Request failed" });
+        });
       } catch (err) {
         console.error(`Error in "${eventName}":`, err);
 
@@ -79,19 +80,42 @@ io.on("connection", (socket) => {
   // JOIN ROOM
   // ==========================================
 
-  handle("join-room", ({ roomCode, userId, mapId }) => {
+  handle("join-room", async ({ roomCode, userId }) => {
     if (!roomCode || !userId) return;
-
     const normalizedRoomCode = String(roomCode).toUpperCase();
-
+    const { data: match, error } = await supabase
+      .from("matches")
+      .select("id, current_map, round_id, round_status, game_mode")
+      .eq("room_code", normalizedRoomCode)
+      .single();
+    if (error || !match)
+      return socket.emit("interaction-error", { message: "Room not found" });
+    const { data: player } = await supabase
+      .from("match_players")
+      .select("id")
+      .eq("match_id", match.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!player)
+      return socket.emit("interaction-error", { message: "Not a room member" });
     socket.join(normalizedRoomCode);
-
     socket.data.roomCode = normalizedRoomCode;
     socket.data.userId = userId;
-
-    console.log(`User ${userId} joined room ${normalizedRoomCode}`);
-
-    controller.join({ roomCode: normalizedRoomCode, userId, mapId }, ctx);
+    if (match.round_status === "PLAYING") {
+      const existing = controller.rooms[normalizedRoomCode];
+      if (!existing || existing.roundId !== match.round_id) {
+        // A restart cannot safely reconstruct a live timer: abort the round in DB.
+        if (!existing)
+          return socket.emit("interaction-error", {
+            message:
+              "Round interrupted by server restart. Return to World Map.",
+          });
+      }
+    }
+    controller.join(
+      { roomCode: normalizedRoomCode, userId, mapId: match.current_map },
+      ctx,
+    );
   });
 
   // ==========================================
@@ -137,6 +161,28 @@ io.on("connection", (socket) => {
     handle(eventName, (payload) => controller.handle(eventName, payload, ctx));
   });
 
+  handle("finish-free", async ({ roomCode }) => {
+    const key = String(roomCode || "").toUpperCase();
+    if (socket.data.roomCode !== key) return;
+    const { data: match } = await supabase
+      .from("matches")
+      .select("host_id, game_mode")
+      .eq("room_code", key)
+      .maybeSingle();
+    if (
+      !match ||
+      match.game_mode !== "FREE" ||
+      match.host_id !== socket.data.userId
+    )
+      return;
+    const room = controller.rooms[key];
+    if (!room) return;
+    const result = room.finishRound();
+    if (!result) return;
+    await controller.onRoundFinished(result);
+    toRoom(key, "map-finished", result);
+  });
+
   // ==========================================
   // DISCONNECT
   // ==========================================
@@ -161,11 +207,9 @@ io.on("connection", (socket) => {
 // ==========================================
 
 setInterval(() => {
-  try {
-    controller.tick(toRoom);
-  } catch (err) {
-    console.error("Error in station tick:", err);
-  }
+  controller
+    .tick(toRoom)
+    .catch((err) => console.error("Error in station tick:", err));
 }, 200);
 
 // ==========================================

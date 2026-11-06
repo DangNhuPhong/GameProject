@@ -1,3 +1,5 @@
+import { controller } from "../classes/gameRuntime.js";
+import { canPlayStoryMap } from "../classes/storyConfig.js";
 import { supabase } from "../config/supabase.js";
 
 const generateRoomCode = () => {
@@ -77,6 +79,10 @@ export const createMatch = async (req, res) => {
         status: "WAITING",
         map,
         max_players,
+        game_mode: "STORY",
+        current_map: "bistro",
+        story_total: 0,
+        round_status: "IDLE",
       })
       .select()
       .single();
@@ -418,6 +424,8 @@ export const startMatch = async (req, res) => {
       .update({
         status: "PLAYING",
         started_at: new Date().toISOString(),
+        round_status: match.game_mode === "FREE" ? "PLAYING" : "IDLE",
+        round_id: match.game_mode === "FREE" ? crypto.randomUUID() : null,
       })
       .eq("id", match.id)
       .select()
@@ -427,6 +435,13 @@ export const startMatch = async (req, res) => {
       throw updateError;
     }
 
+    if (updatedMatch.game_mode === "FREE") {
+      controller.configureRound(roomCode, {
+        mapId: updatedMatch.current_map,
+        roundId: updatedMatch.round_id,
+        durationMs: null,
+      });
+    }
     return res.json({
       success: true,
       message: "Match started",
@@ -441,3 +456,96 @@ export const startMatch = async (req, res) => {
     });
   }
 };
+
+// Authenticated host-only endpoints. Never trust user_id from request body.
+async function verifyHost(req, res) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  if (!token) {
+    res.status(401).json({ message: "Missing token" });
+    return null;
+  }
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    res.status(401).json({ message: "Invalid token" });
+    return null;
+  }
+  const { data: match } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("room_code", req.params.roomCode.toUpperCase())
+    .maybeSingle();
+  if (!match) {
+    res.status(404).json({ message: "Room not found" });
+    return null;
+  }
+  if (match.host_id !== user.id) {
+    res.status(403).json({ message: "Host only" });
+    return null;
+  }
+  return match;
+}
+
+export async function updateMode(req, res) {
+  try {
+    const match = await verifyHost(req, res);
+    if (!match) return;
+    if (match.status !== "WAITING")
+      return res.status(409).json({ message: "Already started" });
+    const { gameMode, mapId } = req.body;
+    if (!["STORY", "FREE"].includes(gameMode))
+      return res.status(400).json({ message: "Invalid mode" });
+    if (gameMode === "FREE" && !["bistro", "farm", "kitchen"].includes(mapId))
+      return res.status(400).json({ message: "Invalid map" });
+    const { data, error } = await supabase
+      .from("matches")
+      .update({
+        game_mode: gameMode,
+        current_map: gameMode === "FREE" ? mapId : "bistro",
+      })
+      .eq("id", match.id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json({ data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: e.message });
+  }
+}
+
+export async function startStoryRound(req, res) {
+  try {
+    const match = await verifyHost(req, res);
+    if (!match) return;
+    if (match.status !== "PLAYING" || match.game_mode !== "STORY")
+      return res.status(409).json({ message: "Not a Story room" });
+    if (match.round_status === "PLAYING")
+      return res.status(409).json({ message: "Round already active" });
+    const mapId = req.body.mapId;
+    if (!canPlayStoryMap(mapId, match.story_total))
+      return res.status(403).json({ message: "Map locked or unavailable" });
+    const durationMs = mapId === "bistro" ? 180000 : 180000;
+    const roundId = crypto.randomUUID();
+    const { data, error } = await supabase
+      .from("matches")
+      .update({
+        current_map: mapId,
+        round_id: roundId,
+        round_status: "PLAYING",
+        round_score: null,
+      })
+      .eq("id", match.id)
+      .neq("round_status", "PLAYING")
+      .select()
+      .single();
+    if (error) throw error;
+    controller.configureRound(match.room_code, { mapId, roundId, durationMs });
+    res.json({ data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: e.message });
+  }
+}
