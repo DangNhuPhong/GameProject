@@ -57,6 +57,11 @@ class GameRoom {
     this.nextOrderAt = Date.now() + 12000;
 
     this.score = 0;
+    this.roundStatus = "PLAYING";
+    this.roundStartedAt = null;
+    this.roundEndsAt = null;
+    this.roundId = null;
+    this.finalScore = null;
     // Orders are removed after expiration, but their penalty is recorded once.
     this.expiredOrders = [];
     this.expiredPenalties = 0;
@@ -148,6 +153,7 @@ class GameRoom {
   }
 
   updateOrders(now = Date.now()) {
+    if (this.roundStatus !== "PLAYING") return this.orders;
     const activeOrders = [];
 
     for (const order of this.orders) {
@@ -470,6 +476,16 @@ class GameRoom {
   // GAME STATE
   // =====================================
 
+  finishRound() {
+    if (this.roundStatus === "FINISHED") return null;
+    this.roundStatus = "FINISHED";
+    this.finalScore = this.score;
+    return {
+      roomCode: this.roomCode, mapId: this.mapId, roundId: this.roundId,
+      score: this.finalScore, expiredPenalties: this.expiredPenalties,
+    };
+  }
+
   getState() {
     return {
       roomCode: this.roomCode,
@@ -492,6 +508,10 @@ class GameRoom {
       orders: this.getOrders(),
       score: this.score,
       expiredPenalties: this.expiredPenalties,
+      roundStatus: this.roundStatus,
+      roundEndsAt: this.roundEndsAt,
+      roundId: this.roundId,
+      finalScore: this.finalScore,
     };
   }
 }
