@@ -134,6 +134,7 @@ export default class GameController {
     ctx.toSender("orders-updated", {
       orders: room.getOrders(),
       score: room.score,
+      expiredPenalties: room.expiredPenalties,
     });
 
     ctx.toSender("room-joined", { roomCode: code(roomCode), userId });
@@ -345,6 +346,7 @@ export default class GameController {
     ctx.toSender("orders-list", {
       orders: room.getOrders(),
       score: room.score,
+      expiredPenalties: room.expiredPenalties,
     });
   }
 
@@ -395,6 +397,7 @@ export default class GameController {
     ctx.toRoom(key, "orders-updated", {
       orders: room.getOrders(),
       score: room.score,
+      expiredPenalties: room.expiredPenalties,
     });
   }
 
@@ -688,13 +691,25 @@ export default class GameController {
       const before = room.orders.map((o) => o.id).join(",");
 
       room.updateOrders();
+      const expiredOrders = room.drainExpiredOrders();
 
       const after = room.orders.map((o) => o.id).join(",");
 
-      if (before !== after) {
+      if (expiredOrders.length > 0) {
+        for (const order of expiredOrders) {
+          toRoom(room.roomCode, "order-expired", {
+            order,
+            penalty: order.penalty,
+            score: room.score,
+          });
+        }
+      }
+
+      if (before !== after || expiredOrders.length > 0) {
         toRoom(room.roomCode, "orders-updated", {
           orders: room.getOrders(),
           score: room.score,
+          expiredPenalties: room.expiredPenalties,
         });
       }
     }
