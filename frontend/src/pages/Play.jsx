@@ -62,8 +62,6 @@ function Play() {
       {profile && (
         <div className="pl-glass pl-profile">
           <span className="pl-profile-name">{profile.username}</span>
-          <span>Lv. {profile.level}</span>
-          <span>🪙 {profile.coins}</span>
         </div>
       )}
 

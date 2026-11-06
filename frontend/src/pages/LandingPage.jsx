@@ -121,11 +121,6 @@ function LandingPage() {
             {user ? (
               <div className="lp-menu-user">
                 <span className="lp-menu-user-name">{displayName}</span>
-                {profile && (
-                  <span className="lp-menu-user-stats">
-                    Lv. {profile.level} · 🪙 {profile.coins}
-                  </span>
-                )}
               </div>
             ) : (
               <button
@@ -190,15 +185,15 @@ function LandingPage() {
             </p>
 
             <p>
-              <strong>Authors:</strong> Đặng Như Phong and Tô Huyền Châu
+              This website and game are created for educational purposes only.
+              This is a non-commercial student project and is not affiliated
+              with or endorsed by any official game, company, or brand. All
+              third-party trademarks and assets belong to their respective
+              owners.
             </p>
-            <p>
-              <strong>Disclaimer:</strong> This website and game are created for
-              educational purposes only. This is a non-commercial student
-              project and is not affiliated with or endorsed by any official
-              game, company, or brand. All third-party trademarks and assets
-              belong to their respective owners.
-            </p>
+
+            <p className="lp-about-author">Đặng Như Phong</p>
+            <p className="lp-about-author">Tô Huyền Châu</p>
             <button
               className="lp-glass lp-btn"
               onClick={() => setAboutOpen(false)}

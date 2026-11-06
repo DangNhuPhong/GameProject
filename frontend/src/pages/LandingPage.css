@@ -230,8 +230,13 @@
 
 .lp-about-card p {
   margin: 0 0 20px;
+  text-align: left;
   font-weight: 600;
   line-height: 1.5;
+}
+
+.lp-about-card .lp-about-author {
+  text-align: right;
 }
 
 .lp-btn {
