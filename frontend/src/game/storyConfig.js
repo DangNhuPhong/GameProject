@@ -10,7 +10,7 @@ export const STORY_MAPS = [
   {
     id: "farm",
     name: "Farm",
-    unlockScore: 600,
+    unlockScore: 0,
     durationMs: 180000,
     available: true,
   },
