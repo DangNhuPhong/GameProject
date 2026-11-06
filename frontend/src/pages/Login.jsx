@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import "./Play.css";
+import "./Room.css";
 import "./Login.css";
 
 function Login() {
@@ -34,13 +36,15 @@ function Login() {
   };
 
   return (
-    <div className="home-landing">
-      <div className="page-card">
+    <div className="pl-root room-page auth-page">
+      <div className="pl-card pl-glass room-card auth-card">
         <h1>Login</h1>
 
         <form onSubmit={handleLogin}>
           <input
             type="email"
+            aria-label="Email"
+            autoComplete="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -49,15 +53,17 @@ function Login() {
 
           <input
             type="password"
+            aria-label="Password"
+            autoComplete="current-password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
 
-          {error && <p className="error">{error}</p>}
+          {error && <p className="room-error" role="alert">{error}</p>}
 
-          <button type="submit" disabled={loading}>
+          <button className="pl-btn" type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
@@ -65,7 +71,7 @@ function Login() {
         <p className="switch-text">Don't have an account?</p>
 
         <button
-          className="secondary-button"
+          className="pl-btn pl-btn-back"
           onClick={() => navigate("/register")}
         >
           Register

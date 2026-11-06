@@ -1,85 +1,11 @@
-.lobby-page {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 24px 16px 40px;
-  /* Đặt ảnh tại: public/landing-bg.png (hoặc đổi đường dẫn cho khớp) */
-  background: #2a1a10 url("../assets/landing-bg.png") center / cover no-repeat;
-  overflow: hidden;
+.room-page .lobby-card { width: min(100%, 560px); }
+.lobby-card .players { margin: 8px 0; }
+.lobby-card .player {
+ display: flex; justify-content: space-between; align-items: center;
+ gap: 16px; padding: 14px; margin-top: 10px;
+ border: 1px solid #ffffff40; border-radius: 16px; background: #14232199;
+ overflow-wrap: anywhere;
 }
-
-.lobby-card {
-  width: 100%;
-  max-width: 650px;
-  padding: 30px;
-  border-radius: 16px;
-  background: white;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-}
-
-.lobby-card h1 {
-  text-align: center;
-  margin-bottom: 10px;
-}
-
-.lobby-card h2 {
-  text-align: center;
-  letter-spacing: 3px;
-}
-
-.players {
-  margin-top: 25px;
-  margin-bottom: 25px;
-}
-
-.player {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  padding: 14px;
-  margin-bottom: 10px;
-
-  border: 1px solid #ddd;
-  border-radius: 10px;
-}
-
-.lobby-card button {
-  width: 100%;
-  padding: 12px;
-  margin-top: 10px;
-
-  border: none;
-  border-radius: 8px;
-
-  cursor: pointer;
-}
-
-.lobby-card button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.error {
-  padding: 12px;
-  margin: 15px 0;
-
-  background: #ffe5e5;
-  color: #b00020;
-
-  border-radius: 8px;
-}
-
-.game-started {
-  padding: 15px;
-  margin: 15px 0;
-
-  text-align: center;
-
-  border-radius: 8px;
-  background: #e6f7e6;
-}
+.lobby-card .ready { color: #b9f6be; }
+.lobby-card .not-ready { color: #ffe1a3; }
+.lobby-card .player > span:last-child { flex-shrink: 0; font-size: .75rem; }

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { API_URL } from "../services/config";
+import "./Play.css";
+import "./Room.css";
 import "./JoinRoom.css";
 
 function JoinRoom() {
@@ -57,11 +59,12 @@ function JoinRoom() {
   };
 
   return (
-    <div className="home-landing">
-      <div className="page-card">
+    <div className="pl-root room-page">
+      <div className="pl-card pl-glass room-card">
         <h1>Join Room</h1>
 
         <input
+          aria-label="Room code"
           type="text"
           placeholder="Enter room code"
           value={roomCode}
@@ -69,13 +72,13 @@ function JoinRoom() {
           onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
         />
 
-        {error && <p className="error">{error}</p>}
+        {error && <p className="room-error" role="alert">{error}</p>}
 
-        <button onClick={joinRoom} disabled={loading}>
+        <button className="pl-btn" onClick={joinRoom} disabled={loading}>
           {loading ? "Joining..." : "Join Room"}
         </button>
 
-        <button className="secondary-button" onClick={() => navigate("/play")}>
+        <button className="pl-btn pl-btn-back" onClick={() => navigate("/play")}>
           Back
         </button>
       </div>

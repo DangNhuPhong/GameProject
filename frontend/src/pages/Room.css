@@ -1,0 +1,20 @@
+.room-page { overflow: auto; color: #fff; }
+.room-card h1, .room-card h2 { margin: 0 0 8px; text-align: center; }
+.room-card p { margin: 4px 0; }
+.room-card label, .room-field { display: flex; flex-direction: column; gap: 8px; }
+.room-card label + label { margin-top: 12px; }
+.room-card input, .room-card select {
+ width: 100%; min-width: 0; padding: 13px 16px; border-radius: 14px;
+ border: 1px solid #ffffff65; background: #172724d9; color: #fff;
+ font: inherit; color-scheme: dark;
+}
+.room-card input::placeholder { color: #e1e6e3; }
+.room-card input:focus-visible, .room-card select:focus-visible {
+ outline: 3px solid #ffd54a; outline-offset: 3px;
+}
+.room-card .room-error {
+ padding: 12px; border-radius: 12px; background: #681c24e6; color: #fff0ed;
+ line-height: 1.5;
+}
+.room-card button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+@media (max-width: 520px) { .room-page { padding: 24px 16px; } }

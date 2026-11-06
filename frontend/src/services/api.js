@@ -26,7 +26,7 @@ export const getRecipeById = async (id) => {
   return result.data;
 };
 
-export const createMatch = async (userId, maxPlayers = 2) => {
+export const createMatch = async (userId, maxPlayers = 4) => {
   const response = await fetch(`${BASE_URL}/matches`, {
     method: "POST",
     headers: {

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import "./Play.css";
+import "./Room.css";
 import "./Login.css";
 
 function Register() {
@@ -49,13 +51,15 @@ function Register() {
   };
 
   return (
-    <div className="home-landing">
-      <div className="page-card">
+    <div className="pl-root room-page auth-page">
+      <div className="pl-card pl-glass room-card auth-card">
         <h1>Register</h1>
 
         <form onSubmit={handleRegister}>
           <input
             type="text"
+            aria-label="Username"
+            autoComplete="username"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -64,6 +68,8 @@ function Register() {
 
           <input
             type="email"
+            aria-label="Email"
+            autoComplete="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -72,6 +78,8 @@ function Register() {
 
           <input
             type="password"
+            aria-label="Password"
+            autoComplete="new-password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -79,16 +87,16 @@ function Register() {
             required
           />
 
-          {error && <p className="error">{error}</p>}
+          {error && <p className="room-error" role="alert">{error}</p>}
 
-          {message && <p className="success">{message}</p>}
+          {message && <p className="auth-success" role="status">{message}</p>}
 
-          <button type="submit" disabled={loading}>
+          <button className="pl-btn" type="submit" disabled={loading}>
             {loading ? "Creating..." : "Create Account"}
           </button>
         </form>
 
-        <button className="secondary-button" onClick={() => navigate("/login")}>
+        <button className="pl-btn pl-btn-back" onClick={() => navigate("/login")}>
           Back to Login
         </button>
       </div>

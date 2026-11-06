@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { createMatch } from "../services/api";
+import "./Play.css";
+import "./Room.css";
 import "./CreateRoom.css";
 
 function CreateRoom() {
   const navigate = useNavigate();
 
-  const [maxPlayers, setMaxPlayers] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,7 +28,7 @@ function CreateRoom() {
 
       console.log("user.id gửi lên:", user.id, "| email:", user.email);
 
-      const result = await createMatch(user.id, Number(maxPlayers));
+      const result = await createMatch(user.id, 4);
 
       const roomCode = result?.data?.room_code;
 
@@ -45,32 +46,22 @@ function CreateRoom() {
   };
 
   return (
-    <div className="home-landing">
+    <div className="pl-root room-page">
+      <div className="pl-card pl-glass room-card">
       <h1>Create Room</h1>
 
-      <div>
-        <label>Maximum Players</label>
+      <p>Play with 1–4 players. Start whenever everyone is ready.</p>
 
-        <select
-          value={maxPlayers}
-          onChange={(e) => setMaxPlayers(Number(e.target.value))}
-        >
-          <option value={1}>1 Player</option>
-          <option value={2}>2 Players</option>
-          <option value={3}>3 Players</option>
-          <option value={4}>4 Players</option>
-        </select>
-      </div>
+      {error && <p className="room-error" role="alert">{error}</p>}
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <button onClick={handleCreateRoom} disabled={loading}>
+      <button className="pl-btn" onClick={handleCreateRoom} disabled={loading}>
         {loading ? "Creating..." : "Create Room"}
       </button>
 
-      <button onClick={() => navigate("/play")} disabled={loading}>
+      <button className="pl-btn pl-btn-back" onClick={() => navigate("/play")} disabled={loading}>
         Back
       </button>
+      </div>
     </div>
   );
 }
