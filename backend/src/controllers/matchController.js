@@ -563,13 +563,14 @@ export async function quitRound(req, res) {
       .eq("match_id", match.id).eq("user_id", user.id).is("left_at", null).maybeSingle();
     if (memberError) throw memberError;
     if (!member) return res.status(403).json({ message: "Room members only" });
+    const returnToLobby = req.body?.destination === "lobby" || match.game_mode === "FREE";
     const { error } = await supabase.from("matches").update({
-      status: match.game_mode === "FREE" ? "WAITING" : "PLAYING",
+      status: returnToLobby ? "WAITING" : "PLAYING",
       round_status: "IDLE", round_id: null,
     }).eq("id", match.id);
     if (error) throw error;
     controller.removeRoom(match.room_code);
-    if (match.game_mode === "FREE") {
+    if (returnToLobby) {
       const { error: readyError } = await supabase.from("match_players").update({ ready: false })
         .eq("match_id", match.id).is("left_at", null);
       if (readyError) throw readyError;
