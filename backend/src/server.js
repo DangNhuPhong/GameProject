@@ -41,6 +41,9 @@ const toRoom = (roomCode, event, data) => io.to(roomCode).emit(event, data);
 // SOCKET CONNECTION
 // ==========================================
 
+const worldMapHover = new Map();
+const worldRegionIds = new Set(["bistro", "farm", "hall", "dorm", "campus", "sports"]);
+
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
@@ -75,6 +78,39 @@ io.on("connection", (socket) => {
       }
     });
   };
+
+  handle("world-map-join", async ({ roomCode, token }) => {
+    const { data: { user }, error } = await supabase.auth.getUser(token || "");
+    if (error || !user) return;
+    const key = String(roomCode || "").toUpperCase();
+    const { data: match } = await supabase.from("matches").select("id, host_id, game_mode")
+      .eq("room_code", key).maybeSingle();
+    if (!match || match.game_mode !== "STORY") return;
+    const { data: member } = await supabase.from("match_players").select("id")
+      .eq("match_id", match.id).eq("user_id", user.id).is("left_at", null).maybeSingle();
+    if (!member) return;
+    socket.data.worldMap = { key, host: match.host_id === user.id };
+    socket.join(`world-map:${key}`);
+    socket.emit("world-map-hover", { regionId: worldMapHover.get(key)?.regionId || null, selectedId: worldMapHover.get(key)?.selectedId || null });
+  });
+  handle("world-map-hover", ({ regionId, selectedId = null }) => {
+    const map = socket.data.worldMap;
+    if (!map?.host || (regionId !== null && !worldRegionIds.has(regionId)) || (selectedId !== null && !worldRegionIds.has(selectedId))) return;
+    worldMapHover.set(map.key, { regionId, selectedId, socketId: socket.id });
+    io.to(`world-map:${map.key}`).emit("world-map-hover", { regionId, selectedId });
+  });
+  const leaveWorldMap = () => {
+    const map = socket.data.worldMap;
+    if (!map) return;
+    if (worldMapHover.get(map.key)?.socketId === socket.id) {
+      worldMapHover.delete(map.key);
+      io.to(`world-map:${map.key}`).emit("world-map-hover", { regionId: null });
+    }
+    socket.leave(`world-map:${map.key}`);
+    delete socket.data.worldMap;
+  };
+  handle("world-map-leave", leaveWorldMap);
+  socket.on("disconnect", leaveWorldMap);
 
   // ==========================================
   // JOIN ROOM
