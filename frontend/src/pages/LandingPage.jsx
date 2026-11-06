@@ -190,6 +190,9 @@ function LandingPage() {
             </p>
 
             <p>
+              <strong>Authors:</strong> Đặng Như Phong and Tô Huyền Châu
+            </p>
+            <p>
               <strong>Disclaimer:</strong> This website and game are created for
               educational purposes only. This is a non-commercial student
               project and is not affiliated with or endorsed by any official
