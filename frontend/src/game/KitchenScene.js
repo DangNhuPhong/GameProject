@@ -5,10 +5,12 @@ import { getMapConfig } from "./maps";
 import { readLayout, getProp } from "./mapLoader";
 import { STATION_BEHAVIORS } from "./stationBehaviors";
 
-import itemsUrl from "../assets/items.png";
+import itemsUrl from "../assets/items-pixel-v2.png";
+import dishesUrl from "../assets/dishes-pixel.png";
+import cookedPizzaUrl from "../assets/pizza-cooked-pixel.png";
 
-import chefBlueUrl from "../assets/chef-blue.png";
-import chefOrangeUrl from "../assets/chef-orange.png";
+import chefBlueUrl from "../assets/chef-chibi-brown.png";
+import chefOrangeUrl from "../assets/chef-chibi-orange.png";
 import { createGameControls } from "./gameControls";
 
 // =====================================
@@ -108,19 +110,77 @@ function itemFrame(type, status, ingredients = []) {
   return ITEM_FRAMES[`${type}:${status}`] ?? ITEM_FRAMES[`${type}:raw`] ?? 0;
 }
 
-// Đĩa pizza: chín = vàng, cháy = xám đen
-function applyBakeTint(sprite, bakeStatus) {
-  if (bakeStatus === "cooked") sprite.setTint(0xffd27a);
-  else if (bakeStatus === "burnt") sprite.setTint(0x555555);
-  else sprite.clearTint();
+// Build plate textures from the actual contents, shared by held and placed items.
+function setItemAppearance(scene, sprite, item) {
+  if (item.type !== "plate") {
+    sprite.setTexture("items", itemFrame(item.type, item.status));
+    sprite.clearTint();
+    return;
+  }
+  const ingredients = (item.ingredients || []).map((ingredient) =>
+    typeof ingredient === "string"
+      ? { type: ingredient, status: "raw" }
+      : { type: ingredient.type ?? ingredient.ingredientType, status: ingredient.status ?? "raw" },
+  );
+  const exact = (expected) => ingredients.length === expected.length &&
+    expected.every(([type, status]) => ingredients.some((i) => i.type === type && (!status || i.status === status)));
+  const pizza = exact([["dough"], ["tomato", "chopped"]]);
+  if (pizza) {
+    if (item.bakeStatus === "burnt") {
+      sprite.setTexture("dishes", 0);
+      sprite.clearTint();
+      return;
+    }
+    if (item.bakeStatus === "cooked") {
+      sprite.setTexture("pizza-cooked");
+    } else {
+      sprite.setTexture("items", ITEM_FRAMES["plate:full"]);
+    }
+    sprite.clearTint();
+    return;
+  }
+  const burger = exact([["bread"], ["meat", "cooked"], ["tomato", "chopped"]]);
+  if (burger) {
+    sprite.setTexture("dishes", 1);
+    sprite.clearTint();
+    return;
+  }
+  const key = `plate-contents:${JSON.stringify(ingredients.map((i) => [i.type, i.status]).sort())}`;
+  if (!scene.textures.exists(key)) {
+    const texture = scene.textures.createCanvas(key, 128, 128);
+    const ctx = texture.getContext();
+    ctx.imageSmoothingEnabled = false;
+    const draw = (frameNumber, x, y, w, h) => {
+      const frame = scene.textures.getFrame("items", frameNumber);
+      ctx.drawImage(frame.source.image, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight, x, y, w, h);
+    };
+    draw(ITEM_FRAMES["plate:empty"], 0, 0, 128, 128);
+    {
+      const count = ingredients.length;
+      const columns = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / columns);
+      const size = count === 1 ? 84 : Math.min(58, 92 / columns);
+      ingredients.forEach((ingredient, index) => {
+        const row = Math.floor(index / columns);
+        const inRow = Math.min(columns, count - row * columns);
+        const x = 64 - inRow * size / 2 + (index % columns) * size;
+        const y = 64 - rows * size / 2 + row * size;
+        draw(itemFrame(ingredient.type, ingredient.status), x, y, size, size);
+      });
+    }
+    texture.refresh();
+  }
+  sprite.setTexture(key);
+  sprite.clearTint();
 }
 
 // =====================================
-// NHÂN VẬT PIXEL (spritesheet 4 cột x 3 hàng, mỗi khung 16 x 20)
+// Chibi sprites: four animation frames, rows facing down, up, and left.
 // =====================================
 
-const CHEF_FRAME_W = 16;
-const CHEF_FRAME_H = 20;
+const CHEF_FRAME_W = 128;
+const CHEF_FRAME_H = 160;
+const CHEF_SCALE = 0.1875;
 const CHEF_FOOT_OFFSET = 9;
 const CHEF_ROW = { down: 0, up: 1, side: 2 };
 
@@ -287,9 +347,14 @@ export function createKitchenScene({
       });
 
       this.load.spritesheet("items", itemsUrl, {
-        frameWidth: 16,
-        frameHeight: 16,
+        frameWidth: 128,
+        frameHeight: 128,
       });
+      this.load.spritesheet("dishes", dishesUrl, {
+        frameWidth: 128,
+        frameHeight: 128,
+      });
+      this.load.image("pizza-cooked", cookedPizzaUrl);
     }
 
     applyControlMode() {
@@ -684,6 +749,7 @@ export function createKitchenScene({
       const sprite = this.add
         .sprite(pos.x, pos.y + CHEF_FOOT_OFFSET, style.spriteKey, 0)
         .setOrigin(0.5, 1)
+        .setScale(CHEF_SCALE)
         .setDepth(5);
 
       return {
@@ -825,6 +891,7 @@ export function createKitchenScene({
       if (!this.items[itemData.id]) {
         const sprite = this.add
           .image(itemData.x, itemData.y, "items", 0)
+          .setScale(0.125)
           .setDepth(3);
 
         this.items[itemData.id] = {
@@ -853,12 +920,8 @@ export function createKitchenScene({
         else if (p.heldItemId === item.id) p.heldItemId = null;
       });
 
-      item.sprite.setFrame(itemFrame(item.type, item.status, item.ingredients));
-
-      if (item.type === "plate") {
-        item.bakeStatus = itemData.bakeStatus || "raw";
-        applyBakeTint(item.sprite, item.bakeStatus);
-      }
+      item.bakeStatus = itemData.bakeStatus || "raw";
+      setItemAppearance(this, item.sprite, item);
 
       if (item.state === "held") {
         item.sprite.setVisible(false);
@@ -1182,6 +1245,7 @@ export function createKitchenScene({
         const player = this.add
           .sprite(x, y + CHEF_FOOT_OFFSET, "chef-orange", 0)
           .setOrigin(0.5, 1)
+          .setScale(CHEF_SCALE)
           .setDepth(5);
 
         this.otherPlayers[userId] = {
@@ -2123,18 +2187,11 @@ export function createKitchenScene({
         if (!p.heldItemVisual) {
           p.heldItemVisual = this.add
             .image(p.body.x, p.body.y, "items", 0)
+            .setScale(0.125)
             .setDepth(6);
         }
 
-        p.heldItemVisual.setFrame(
-          itemFrame(heldItem.type, heldItem.status, heldItem.ingredients),
-        );
-
-        if (heldItem.type === "plate") {
-          applyBakeTint(p.heldItemVisual, heldItem.bakeStatus);
-        } else {
-          p.heldItemVisual.clearTint();
-        }
+        setItemAppearance(this, p.heldItemVisual, heldItem);
 
         const hold = heldItemOffset(p.facing, p.sprite.flipX);
 
