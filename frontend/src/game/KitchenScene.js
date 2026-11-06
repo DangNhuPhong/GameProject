@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import GameAudio, { preloadGameAudio } from "./GameAudio";
 import { socket } from "../services/socket";
 import LocalTransport from "./LocalTransport";
 import { getMapConfig } from "./maps";
@@ -319,6 +320,7 @@ export function createKitchenScene({
     // =====================================
 
     preload() {
+      preloadGameAudio(this);
       const cfg = this.mapCfg;
 
       // Offline dùng file map đóng gói sẵn, online lấy từ server
@@ -431,6 +433,8 @@ export function createKitchenScene({
       // =================================
 
       this.layout = readLayout(map);
+      this.audioEffects = new GameAudio(this);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.audioEffects.destroy());
 
       this.stationDefs = this.layout.stations
         .filter((s) => STATION_BEHAVIORS[s.kind])
@@ -569,6 +573,7 @@ export function createKitchenScene({
       this.events.once(Phaser.Scenes.Events.DESTROY, cleanupNet);
 
       on("game-state", (state) => {
+        this.audioEffects.syncRound(state);
         if (typeof onClockSync === "function") onClockSync(state.roundEndsAt);
         if (
           state.roundStatus === "FINISHED" &&
@@ -583,6 +588,7 @@ export function createKitchenScene({
         }
       });
       on("map-finished", (result) => {
+        this.audioEffects.finish();
         if (typeof onRoundFinished === "function") onRoundFinished(result);
       });
 
@@ -621,11 +627,15 @@ export function createKitchenScene({
       ].forEach((eventName) => {
         on(eventName, (payload) => {
           const item = payload?.item || payload?.plate;
+          if (item) this.audioEffects.play("place", 0.3);
           if (item) this.upsertItem(item);
         });
       });
 
       on("station-updated", ({ station, item }) => {
+        if (station && this.stations[station.id]?.itemId !== station.itemId) {
+          this.audioEffects.play("place", 0.3);
+        }
         if (item) this.upsertItem(item);
         if (station) this.setStationState(station);
       });
@@ -653,6 +663,7 @@ export function createKitchenScene({
       });
 
       on("order-expired", ({ order, penalty, score }) => {
+        this.audioEffects.play("error", 0.45);
         if (typeof score === "number") this.setScore(score);
         this.showToast(
           `${order?.name || "Order"} expired! -${penalty ?? 0}`,
@@ -661,6 +672,7 @@ export function createKitchenScene({
       });
 
       on("order-completed", ({ order, points, score, userId: who }) => {
+        this.audioEffects.play("success", 0.55);
         if (typeof score === "number") this.setScore(score);
 
         const name = order?.name || "dish";
@@ -680,6 +692,7 @@ export function createKitchenScene({
       });
 
       on("interaction-error", ({ message }) => {
+        this.audioEffects.play("error", 0.4);
         console.warn("Server:", message);
         this.showToast(message, "#ef4444");
       });
@@ -887,6 +900,7 @@ export function createKitchenScene({
 
     upsertItem(itemData) {
       if (!itemData?.id) return;
+      const alreadyKnown = Boolean(this.items[itemData.id]);
 
       if (!this.items[itemData.id]) {
         const sprite = this.add
@@ -907,7 +921,11 @@ export function createKitchenScene({
       item.userId = itemData.userId || null;
       item.status = itemData.status || "raw";
       item.stationId = itemData.stationId || null;
-      item.ingredients = itemData.ingredients || [];
+      const nextIngredients = itemData.ingredients || [];
+      if (alreadyKnown && item.type === "plate" && nextIngredients.length > (item.ingredients?.length || 0)) {
+        this.audioEffects.play("place", 0.3);
+      }
+      item.ingredients = nextIngredients;
       item.x = itemData.x;
       item.y = itemData.y;
 
@@ -2009,6 +2027,7 @@ export function createKitchenScene({
 
         const moving =
           Math.hypot(other.curX - other.prevX, other.curY - other.prevY) > 0.02;
+        this.audioEffects.step(other.userId || other, other.curX, other.curY, moving);
 
         other.prevX = other.curX;
         other.prevY = other.curY;
@@ -2122,6 +2141,8 @@ export function createKitchenScene({
         if (p.body.x !== beforeX || p.body.y !== beforeY) {
           this.freezeCutting(p);
         }
+        this.audioEffects.step(p.slot, p.body.x, p.body.y,
+          Math.hypot(p.body.x - beforeX, p.body.y - beforeY) > 0.01);
 
         this.updatePlayerSprite(p, dx, dy);
 
@@ -2132,6 +2153,7 @@ export function createKitchenScene({
 
       this.updateCameraTarget();
       this.updateOtherPlayers();
+      this.audioEffects.update();
 
       // Bảng order: đóng khi người đã mở nó đi xa
       if (this.ordersEl) {

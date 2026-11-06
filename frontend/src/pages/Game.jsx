@@ -9,6 +9,7 @@ import { quitRound } from "../services/storyApi";
 import { getMatch, getRecipes } from "../services/api";
 import { createKitchenScene } from "../game/KitchenScene";
 import { loadControlMode, saveControlMode } from "../game/gameControls";
+import { readEffectsVolume, saveEffectsVolume } from "../game/GameAudio";
 import { socket } from "../services/socket";
 
 
@@ -60,6 +61,7 @@ function Game({ mode = "coop-online" }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuView, setMenuView] = useState("main"); // "main" | "settings" | "tutorial"
   const [controlMode, setControlMode] = useState(loadControlMode);
+  const [effectsVolume, setEffectsVolume] = useState(readEffectsVolume);
 
   // Scene đọc trạng thái menu qua ref (không bị kẹt giá trị cũ)
   const menuOpenRef = useRef(false);
@@ -408,6 +410,23 @@ function Game({ mode = "coop-online" }) {
             ) : (
               <>
                 <div className="gm-title">Settings</div>
+                <label className="gm-label" htmlFor="effects-volume">
+                  Sound effects · {Math.round(effectsVolume * 100)}%
+                </label>
+                <input
+                  id="effects-volume"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={effectsVolume}
+                  style={{ width: "100%", accentColor: "#ffd166" }}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setEffectsVolume(value);
+                    saveEffectsVolume(value);
+                  }}
+                />
                 <div className="gm-label">Controls</div>
 
                 {/* Co-op cùng máy chỉ dùng bàn phím */}
