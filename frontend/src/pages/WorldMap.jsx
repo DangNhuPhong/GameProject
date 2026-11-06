@@ -9,11 +9,46 @@ import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
 
 const REGIONS = [
-  { id: "farm", name: "Farm", points: "1003,254 1046,233 1110,214 1187,191 1270,174 1359,167 1438,180 1497,209 1556,247 1601,290 1625,331 1625,373 1602,410 1560,444 1511,467 1454,477 1408,469 1365,447 1327,419 1276,394 1216,369 1153,347 1091,327 1038,307 1008,288 997,270", x: 1320, y: 310 },
-  { id: "hall", name: "Library", points: "607,400 646,370 700,346 757,329 797,321 830,333 855,351 860,391 857,435 834,469 799,497 772,525 735,533 695,526 666,509 647,479 620,451 603,427", x: 735, y: 425 },
-  { id: "dorm", name: "Computer Room", points: "865,375 892,355 930,352 973,363 1028,382 1093,390 1165,391 1235,402 1280,425 1312,458 1338,505 1358,552 1364,584 1353,610 1327,630 1280,642 1212,643 1137,640 1070,633 1029,619 996,592 962,569 920,550 884,536 863,516 856,474 859,421", x: 1110, y: 510 },
-  { id: "bistro", name: "Classroom", points: "365,504 384,489 416,483 454,489 463,467 456,412 458,364 471,336 493,328 522,336 553,352 577,384 599,413 602,441 594,474 596,512 608,532 645,546 701,561 764,578 829,598 893,618 948,629 982,648 1002,678 1014,714 1026,752 1024,774 1005,786 966,791 915,787 859,780 802,772 745,758 694,741 647,719 610,694 584,677 541,662 497,649 457,632 423,610 395,580 378,550", x: 685, y: 650 },
-  { id: "sports", name: "Sports Ground", points: "7,660 25,613 55,581 101,573 154,564 203,555 249,564 278,580 284,611 307,631 340,647 375,652 405,674 424,707 436,748 438,790 423,834 393,879 363,888 318,889 271,871 221,850 168,830 115,812 62,793 24,775 6,752", x: 220, y: 715 },
+  {
+    id: "farm",
+    name: "Farm",
+    points:
+      "1003,254 1046,233 1110,214 1187,191 1270,174 1359,167 1438,180 1497,209 1556,247 1601,290 1625,331 1625,373 1602,410 1560,444 1511,467 1454,477 1408,469 1365,447 1327,419 1276,394 1216,369 1153,347 1091,327 1038,307 1008,288 997,270",
+    x: 1320,
+    y: 310,
+  },
+  {
+    id: "hall",
+    name: "Library",
+    points:
+      "610.5864,408.7925 646.6963,386.9319 700,346 761.5916,349.769 795.5131,335.5596 829.4346,338.8387 856.7906,355.2341 845.8482,389.118 863.356,419.7228 861.1675,475.4672 838.1885,497.3278 780.1937,520.2813 735,533 695,526 664.2042,517.0023 624.8115,498.4208 600.7382,482.0254 603,427",
+    x: 735,
+    y: 425,
+  },
+  {
+    id: "dorm",
+    name: "Computer Room",
+    points:
+      "868.8272,378.1877 892,355 932.2932,343.2108 971.6859,349.769 1028.5864,363.9783 1095.3351,381.4668 1166.4607,394.5831 1231.0209,416.4437 1276.9791,431.7461 1312,458 1333.8796,489.6766 1337.1623,522.4674 1339.3508,547.607 1334.9738,573.8397 1325.1257,600.0724 1267.1309,615.3748 1199.288,620.8399 1142.3874,636.1423 1078.9215,641.6075 1029,619 996,592 959.6492,573.8397 923.5393,562.9094 875.3927,542.1419 868.8272,520.2813 866.6387,476.5602 869.9215,425.1879",
+    x: 1110,
+    y: 510,
+  },
+  {
+    id: "bistro",
+    name: "Classroom",
+    points:
+      "365,504 385.1728,484.2114 407.0576,474.3742 422.377,464.5369 453.0157,459.0718 456,412 458,364 462.8639,332.2805 498.9738,322.4433 525.2356,327.9084 565.7225,338.8387 594.1728,355.2341 596.3613,382.5598 595.267,441.5833 594,474 591.9843,513.7232 616.0576,525.7465 653.2618,536.6768 709.0681,553.0722 767.0628,569.4676 809.7382,539.9559 839.2827,545.421 845.8482,568.3746 849.1309,588.0491 904.9372,602.2585 937.7644,608.8166 970.5916,615.3748 973.8743,642.7005 1007.7958,652.5377 1046.0942,687.5146 1057.0366,706.0961 1074.5445,749.8172 1059.2251,784.7941 1041.7173,809.9338 1016.5497,841.6316 985.911,855.841 947.6126,855.841 896.1832,842.7246 779.0995,814.3059 680.6178,783.7011 588.7016,742.166 494.5969,686.4216 378.6073,605.5375 329.3665,571.6537",
+    x: 685,
+    y: 650,
+  },
+  {
+    id: "sports",
+    name: "Sports Ground",
+    points:
+      "97.9099,502.3285 135.5675,482.7685 183.7693,469.227 216.9081,482.7685 233.4774,503.8331 251.5531,526.4022 250.0942,564 279.0942,580 308.7928,606.1466 332.8937,622.6973 355.4882,637.7434 376.0942,652 406.0942,674 454.1099,714.8403 423.4712,731.2358 378.6073,749.8172 326.0837,773.8639 273.5602,797.9105 167.2,852.9028 146.1117,809.2691 106.9477,801.746 72.3027,809.2691 43.6828,783.6907 4.5189,755.1031 6.0252,673.8541 6.0252,561.0083 48.2018,536.9345",
+    x: 220,
+    y: 715,
+  },
 ];
 
 export default function WorldMap({ online = false }) {
@@ -30,45 +65,75 @@ export default function WorldMap({ online = false }) {
   const activeRegion = REGIONS.find((region) => region.id === selected);
   useEffect(() => {
     if (!online || !userId) return;
-    const sync = ({ regionId, selectedId }) => { setHovered(regionId); setSelected(selectedId || null); };
+    const sync = ({ regionId, selectedId }) => {
+      setHovered(regionId);
+      setSelected(selectedId || null);
+    };
     const join = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) socket.emit("world-map-join", { roomCode, token: session.access_token });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session)
+        socket.emit("world-map-join", {
+          roomCode,
+          token: session.access_token,
+        });
     };
     socket.on("world-map-hover", sync);
     socket.on("connect", join);
-    if (socket.connected) join(); else socket.connect();
+    if (socket.connected) join();
+    else socket.connect();
     return () => {
       socket.emit("world-map-leave");
       socket.off("world-map-hover", sync);
       socket.off("connect", join);
     };
   }, [online, userId, roomCode]);
-  const changeRegion = useCallback((id, choose = false) => {
-    if (!canControl || busy) return;
-    const selectedId = choose ? id : selected;
-    setHovered(id);
-    if (choose) setSelected(id);
-    if (online) socket.emit("world-map-hover", { regionId: id, selectedId });
-  }, [canControl, busy, online, selected]);
+  const changeRegion = useCallback(
+    (id, choose = false) => {
+      if (!canControl || busy) return;
+      const selectedId = choose ? id : selected;
+      setHovered(id);
+      if (choose) setSelected(id);
+      if (online) socket.emit("world-map-hover", { regionId: id, selectedId });
+    },
+    [canControl, busy, online, selected],
+  );
 
   useEffect(() => {
     if (!canControl) return;
     const onKey = (e) => {
-      if (e.repeat || e.ctrlKey || e.altKey || e.metaKey ||
-          e.target?.closest?.("input, select, textarea, [contenteditable=true]")) return;
-      const directions = { w: [0,-1], a: [-1,0], s: [0,1], d: [1,0] };
+      if (
+        e.repeat ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.metaKey ||
+        e.target?.closest?.("input, select, textarea, [contenteditable=true]")
+      )
+        return;
+      const directions = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
       const direction = directions[e.key.toLowerCase()];
       if (!direction) return;
       e.preventDefault();
       const current = REGIONS.find((region) => region.id === selected);
-      if (!current) { changeRegion("bistro", true); return; }
-      const candidates = REGIONS.filter((region) => region !== current).map((region) => {
-        const dx = region.x - current.x, dy = region.y - current.y;
-        const forward = dx * direction[0] + dy * direction[1];
-        const sideways = Math.abs(dx * direction[1] - dy * direction[0]);
-        return { region, forward, distance: Math.hypot(dx,dy) + sideways * 2 };
-      }).filter((candidate) => candidate.forward > 0).sort((a,b) => a.distance - b.distance);
+      if (!current) {
+        changeRegion("bistro", true);
+        return;
+      }
+      const candidates = REGIONS.filter((region) => region !== current)
+        .map((region) => {
+          const dx = region.x - current.x,
+            dy = region.y - current.y;
+          const forward = dx * direction[0] + dy * direction[1];
+          const sideways = Math.abs(dx * direction[1] - dy * direction[0]);
+          return {
+            region,
+            forward,
+            distance: Math.hypot(dx, dy) + sideways * 2,
+          };
+        })
+        .filter((candidate) => candidate.forward > 0)
+        .sort((a, b) => a.distance - b.distance);
       if (candidates[0]) changeRegion(candidates[0].region.id, true);
     };
     window.addEventListener("keydown", onKey);
@@ -139,42 +204,93 @@ export default function WorldMap({ online = false }) {
     <main className="wm-page">
       <header className="wm-header wm-header-compact">
         <p className="wm-score">Score · {total}</p>
-        <p>{canControl ? "W A S D · Select region" : "W A S D · Host selects"}</p>
+        <p>
+          {canControl ? "W A S D · Select region" : "W A S D · Host selects"}
+        </p>
       </header>
-      {error && <p role="alert" className="wm-error">{error}</p>}
+      {error && (
+        <p role="alert" className="wm-error">
+          {error}
+        </p>
+      )}
       <div className="wm-map">
-        <svg viewBox="0 0 1672 941" preserveAspectRatio="xMidYMid slice" aria-label="Choose a map region">
+        <svg
+          viewBox="0 0 1672 941"
+          preserveAspectRatio="xMidYMid slice"
+          aria-label="Choose a map region"
+        >
           <image href={worldMapImage} width="1672" height="941" />
           {REGIONS.map((region) => {
             const unlocked = canPlayStoryMap(region.id, total);
-            return <g key={region.id}>
-              <polygon points={region.points}
-                className={`wm-region${hovered === region.id ? " wm-active" : ""}${selected === region.id ? " wm-selected" : ""}`}
-                role={canControl ? "button" : undefined} tabIndex={canControl ? 0 : -1}
-                aria-label={`${region.name}${unlocked ? "" : " — Locked"}`}
-                onPointerEnter={() => changeRegion(region.id)} onPointerLeave={() => changeRegion(null)} 
-                onFocus={() => changeRegion(region.id)} onBlur={() => changeRegion(null)}
-                onClick={() => changeRegion(region.id, true)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); changeRegion(region.id, true); } }}
-                style={{ pointerEvents: canControl ? "auto" : "none" }} />
-              <text x={region.x} y={region.y} className="wm-region-label">{unlocked ? "" : "🔒 "}{region.name}</text>
-            </g>;
+            return (
+              <g key={region.id}>
+                <polygon
+                  points={region.points}
+                  className={`wm-region${hovered === region.id ? " wm-active" : ""}${selected === region.id ? " wm-selected" : ""}`}
+                  role={canControl ? "button" : undefined}
+                  tabIndex={canControl ? 0 : -1}
+                  aria-label={`${region.name}${unlocked ? "" : " — Locked"}`}
+                  onPointerEnter={() => changeRegion(region.id)}
+                  onPointerLeave={() => changeRegion(null)}
+                  onFocus={() => changeRegion(region.id)}
+                  onBlur={() => changeRegion(null)}
+                  onClick={() => changeRegion(region.id, true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      changeRegion(region.id, true);
+                    }
+                  }}
+                  style={{ pointerEvents: canControl ? "auto" : "none" }}
+                />
+                <text x={region.x} y={region.y} className="wm-region-label">
+                  {unlocked ? "" : "🔒 "}
+                  {region.name}
+                </text>
+              </g>
+            );
           })}
         </svg>
       </div>
       <section className="wm-info" aria-live="polite">
-        {activeRegion ? <>
-          <div><h2>{activeRegion.name}</h2><p>{canPlayStoryMap(activeRegion.id, total) ? "Unlocked" :
-            STORY_MAPS.find((map) => map.id === activeRegion.id)?.available ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} points` : "Locked"}</p></div>
-          {canControl && <button disabled={busy || !canPlayStoryMap(activeRegion.id, total)}
-            onClick={() => selectMap(activeRegion)}>Play</button>}
-        </> : <p>{canControl ? "Choose a region on the map" : "Waiting for the host to point to a region"}</p>}
+        {activeRegion ? (
+          <>
+            <div>
+              <h2>{activeRegion.name}</h2>
+              <p>
+                {canPlayStoryMap(activeRegion.id, total)
+                  ? "Unlocked"
+                  : STORY_MAPS.find((map) => map.id === activeRegion.id)
+                        ?.available
+                    ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} points`
+                    : "Locked"}
+              </p>
+            </div>
+            {canControl && (
+              <button
+                disabled={busy || !canPlayStoryMap(activeRegion.id, total)}
+                onClick={() => selectMap(activeRegion)}
+              >
+                Play
+              </button>
+            )}
+          </>
+        ) : (
+          <p>
+            {canControl
+              ? "Choose a region on the map"
+              : "Waiting for the host to point to a region"}
+          </p>
+        )}
       </section>
       <button
         className="wm-back"
         disabled={busy}
         onClick={async () => {
-          if (!online) { navigate("/play"); return; }
+          if (!online) {
+            navigate("/play");
+            return;
+          }
           setBusy(true);
           setError("");
           try {
