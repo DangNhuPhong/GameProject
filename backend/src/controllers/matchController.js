@@ -16,7 +16,7 @@ const generateRoomCode = () => {
 
 export const createMatch = async (req, res) => {
   try {
-    const { user_id, max_players = 2, map = "Kitchen_1" } = req.body;
+    const { user_id, max_players = 4, map = "Kitchen_1" } = req.body;
 
     if (!user_id) {
       return res.status(400).json({
@@ -546,6 +546,36 @@ export async function startStoryRound(req, res) {
     res.json({ data });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ message: e.message });
+  }
+}
+
+// Return the active group to map selection or the Free Play lobby.
+export async function quitRound(req, res) {
+  try {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token || "");
+    if (authError || !user) return res.status(401).json({ message: "Please sign in" });
+    const { data: match, error: matchError } = await supabase.from("matches").select("*")
+      .eq("room_code", req.params.roomCode.toUpperCase()).single();
+    if (matchError) throw matchError;
+    const { data: member, error: memberError } = await supabase.from("match_players").select("id")
+      .eq("match_id", match.id).eq("user_id", user.id).is("left_at", null).maybeSingle();
+    if (memberError) throw memberError;
+    if (!member) return res.status(403).json({ message: "Room members only" });
+    const { error } = await supabase.from("matches").update({
+      status: match.game_mode === "FREE" ? "WAITING" : "PLAYING",
+      round_status: "IDLE", round_id: null,
+    }).eq("id", match.id);
+    if (error) throw error;
+    controller.removeRoom(match.room_code);
+    if (match.game_mode === "FREE") {
+      const { error: readyError } = await supabase.from("match_players").update({ ready: false })
+        .eq("match_id", match.id).is("left_at", null);
+      if (readyError) throw readyError;
+    }
+    res.json({ data: { success: true } });
+  } catch (e) {
     res.status(500).json({ message: e.message });
   }
 }
