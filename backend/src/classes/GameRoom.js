@@ -57,6 +57,9 @@ class GameRoom {
     this.nextOrderAt = Date.now() + 12000;
 
     this.score = 0;
+    // Orders are removed after expiration, but their penalty is recorded once.
+    this.expiredOrders = [];
+    this.expiredPenalties = 0;
 
     this.mapId = layout.id;
 
@@ -134,10 +137,37 @@ class GameRoom {
     return order;
   }
 
+  getOrderExpirationPenalty(recipeId) {
+    // Fixed penalty per expired order, independent of remaining time.
+    const penalties = {
+      hamburger: 50,
+      pizza: 75,
+      salad: 40,
+    };
+    return penalties[recipeId] ?? 50;
+  }
+
   updateOrders(now = Date.now()) {
-    this.orders = this.orders.filter(
-      (order) => order.expiresAt > now && order.status === "waiting",
-    );
+    const activeOrders = [];
+
+    for (const order of this.orders) {
+      if (order.status !== "waiting") continue;
+
+      if (order.expiresAt <= now) {
+        // An order is removed here, so this branch can only penalize it once.
+        const penalty = this.getOrderExpirationPenalty(order.recipeId);
+        order.status = "expired";
+        order.expiredAt = now;
+        order.penalty = penalty;
+        this.score -= penalty;
+        this.expiredPenalties += penalty;
+        this.expiredOrders.push({ ...order, penalty });
+      } else {
+        activeOrders.push(order);
+      }
+    }
+
+    this.orders = activeOrders;
 
     if (this.orders.length < 3 && now >= this.nextOrderAt) {
       this.createOrder();
@@ -145,6 +175,12 @@ class GameRoom {
     }
 
     return this.orders;
+  }
+
+  drainExpiredOrders() {
+    const expired = this.expiredOrders;
+    this.expiredOrders = [];
+    return expired;
   }
 
   getOrders() {
@@ -455,6 +491,7 @@ class GameRoom {
 
       orders: this.getOrders(),
       score: this.score,
+      expiredPenalties: this.expiredPenalties,
     };
   }
 }
