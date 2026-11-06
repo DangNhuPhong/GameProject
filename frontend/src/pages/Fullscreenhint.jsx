@@ -1,3 +1,4 @@
+import { useMatch } from "react-router-dom";
 import {
   toggleFullscreen,
   isFullscreenSupported,
@@ -7,6 +8,12 @@ import "./Fullscreenhint.css";
 
 export default function FullscreenButton() {
   const isFs = useIsFullscreen();
+  const onlineGame = useMatch("/game/:roomCode");
+  const storyGame = useMatch("/story/:mode/:mapId");
+  const localGame = useMatch("/story-local/:mapId");
+  const offlineWorldMap = useMatch("/world/:mode");
+  const onlineWorldMap = useMatch("/world-online/:roomCode");
+  if (onlineGame || storyGame || localGame || offlineWorldMap || onlineWorldMap) return null;
 
   // iPhone Safari không hỗ trợ -> ẩn nút (dùng PWA "Add to Home Screen")
   if (!isFullscreenSupported()) return null;

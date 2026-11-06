@@ -29,7 +29,7 @@ export default class LocalTransport {
    * @param {string} opts.mapId
    * @param {object} opts.mapJson   nội dung file Tiled JSON của map
    */
-  constructor({ roomCode, mapId, mapJson }) {
+  constructor({ roomCode, mapId, mapJson, durationMs = 180000 }) {
     this.roomCode = roomCode;
     this.connected = true;
     this.listeners = new Map();
@@ -39,6 +39,11 @@ export default class LocalTransport {
     const layout = { id: mapId, ...readLayout(mapJson) };
 
     this.controller = new GameController({ getLayout: () => layout });
+    this.controller.configureRound(roomCode, {
+      mapId,
+      roundId: `local-${Date.now()}`,
+      durationMs,
+    });
 
     // Giống socket.volatile.emit
     this.volatile = { emit: (event, data) => this.emit(event, data) };
@@ -133,9 +138,11 @@ export default class LocalTransport {
 
     this.timer = window.setInterval(() => {
       try {
-        this.controller.tick((_roomCode, event, data) =>
-          this.dispatch(event, data),
-        );
+        Promise.resolve(
+          this.controller.tick((_roomCode, event, data) =>
+            this.dispatch(event, data),
+          ),
+        ).catch((err) => console.error("Local tick error:", err));
       } catch (err) {
         console.error("Local tick error:", err);
       }

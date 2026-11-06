@@ -11,6 +11,7 @@ import JoinRoom from "./pages/JoinRoom";
 import Lobby from "./pages/Lobby";
 import Recipes from "./pages/Recipes";
 import Game from "./pages/Game";
+import WorldMap from "./pages/WorldMap";
 import LandingPage from "./pages/LandingPage";
 
 import useFullscreenHotkey from "./useFullscreenHotkey";
@@ -87,8 +88,28 @@ function App() {
         <Route path="/play" element={<Play />} />
 
         {/* Chế độ offline: không cần đăng nhập, không cần server */}
-        <Route path="/single" element={<Game mode="single" />} />
-        <Route path="/local" element={<Game mode="coop-local" />} />
+        <Route
+          path="/single"
+          element={<Navigate to="/world/single" replace />}
+        />
+        <Route path="/world/:mode" element={<WorldMap />} />
+        <Route path="/story/:mode/:mapId" element={<Game mode="single" />} />
+        <Route
+          path="/local"
+          element={<Navigate to="/world/coop-local" replace />}
+        />
+        <Route
+          path="/story-local/:mapId"
+          element={<Game mode="coop-local" />}
+        />
+        <Route
+          path="/world-online/:roomCode"
+          element={
+            <ProtectedRoute session={session}>
+              <WorldMap online />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/joinroom"

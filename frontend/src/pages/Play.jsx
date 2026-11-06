@@ -70,10 +70,22 @@ function Play() {
       {/* Thẻ ở giữa */}
       {view === "modes" ? (
         <nav className="pl-glass pl-card" aria-label="Game mode">
-          <button className="pl-btn" onClick={() => navigate("/single")}>
+          <button
+            className="pl-btn"
+            onClick={() => {
+              sessionStorage.removeItem("kitchen-story:single");
+              navigate("/world/single");
+            }}
+          >
             Single Player
           </button>
-          <button className="pl-btn" onClick={() => navigate("/local")}>
+          <button
+            className="pl-btn"
+            onClick={() => {
+              sessionStorage.removeItem("kitchen-story:coop-local");
+              navigate("/world/coop-local");
+            }}
+          >
             Local Co-op
           </button>
           <button className="pl-btn" onClick={() => setView("online")}>

@@ -1,13 +1,18 @@
-.home-landing {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
+.auth-card form {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 24px 16px 40px;
-  /* Đặt ảnh tại: public/landing-bg.png (hoặc đổi đường dẫn cho khớp) */
-  background: #2a1a10 url("../assets/landing-bg.png") center / cover no-repeat;
-  overflow: hidden;
+  gap: 14px;
+}
+.auth-card .switch-text {
+  text-align: center;
+  font-size: .9rem;
+  margin-top: 8px;
+}
+.auth-card .auth-success {
+  padding: 12px;
+  border: 1px solid #b9f6be70;
+  border-radius: 12px;
+  background: #204b38b3;
+  color: #e1ffe7;
+  line-height: 1.5;
 }

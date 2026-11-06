@@ -3,8 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { supabase } from "../lib/supabase";
 import { getMatch, setReady, startMatch } from "../services/api";
+import { updateRoomMode } from "../services/storyApi";
 
 import { socket } from "../services/socket";
+import "./Play.css";
+import "./Room.css";
 import "./Lobby.css";
 
 function Lobby() {
@@ -16,15 +19,22 @@ function Lobby() {
   const [loading, setLoading] = useState(true);
   const [ready, setReadyState] = useState(false);
   const [error, setError] = useState("");
+  const [selectedMode, setSelectedMode] = useState("STORY");
+  const [selectedMap, setSelectedMap] = useState("bistro");
 
   // =====================================
   // GO TO GAME
   // =====================================
 
   const goToGame = () => {
-    navigate(`/game/${roomCode}`, {
-      replace: true,
-    });
+    navigate(
+      match?.game_mode === "FREE"
+        ? `/game/${roomCode}`
+        : `/world-online/${roomCode}`,
+      {
+        replace: true,
+      },
+    );
   };
 
   // =====================================
@@ -91,9 +101,14 @@ function Lobby() {
         // ================================
 
         if (matchData.status === "PLAYING") {
-          navigate(`/game/${roomCode}`, {
-            replace: true,
-          });
+          navigate(
+            matchData.game_mode === "FREE"
+              ? `/game/${roomCode}`
+              : `/world-online/${roomCode}`,
+            {
+              replace: true,
+            },
+          );
 
           return;
         }
@@ -135,9 +150,14 @@ function Lobby() {
 
           // Safety check
           if (updatedData.status === "PLAYING") {
-            navigate(`/game/${roomCode}`, {
-              replace: true,
-            });
+            navigate(
+              match?.game_mode === "FREE"
+                ? `/game/${roomCode}`
+                : `/world-online/${roomCode}`,
+              {
+                replace: true,
+              },
+            );
           }
         };
 
@@ -243,9 +263,14 @@ function Lobby() {
               clearInterval(pollTimer);
               pollTimer = null;
 
-              navigate(`/game/${roomCode}`, {
-                replace: true,
-              });
+              navigate(
+                latestMatch.game_mode === "FREE"
+                  ? `/game/${roomCode}`
+                  : `/world-online/${roomCode}`,
+                {
+                  replace: true,
+                },
+              );
             }
           } catch (err) {
             console.error("Lobby polling error:", err);
@@ -346,6 +371,7 @@ function Lobby() {
       // START MATCH IN DATABASE
       // ================================
 
+      await updateRoomMode(roomCode, user.id, selectedMode, selectedMap);
       await startMatch(roomCode, user.id);
 
       // ================================
@@ -360,7 +386,11 @@ function Lobby() {
       // HOST GOES DIRECTLY
       // ================================
 
-      goToGame();
+      navigate(
+        selectedMode === "FREE"
+          ? `/game/${roomCode}`
+          : `/world-online/${roomCode}`,
+      );
     } catch (err) {
       console.error("Start game error:", err);
       setError(err.message);
@@ -384,7 +414,7 @@ function Lobby() {
 
   if (loading) {
     return (
-      <div className="lobby-page">
+      <div className="pl-root room-page">
         <h1>Loading lobby...</h1>
       </div>
     );
@@ -395,15 +425,15 @@ function Lobby() {
   // =====================================
 
   return (
-    <div className="lobby-page">
-      <div className="lobby-card">
+    <div className="pl-root room-page">
+      <div className="pl-card pl-glass room-card lobby-card">
         <h2>Room: {roomCode}</h2>
 
         <p>
           Status: <strong>{match?.status}</strong>
         </p>
 
-        {error && <div className="error">{error}</div>}
+        {error && <div className="room-error" role="alert">{error}</div>}
 
         {/* ================================
             PLAYERS
@@ -435,12 +465,40 @@ function Lobby() {
 
         {match?.status === "WAITING" && (
           <>
-            <button onClick={handleReady}>
+            <button className="pl-btn" onClick={handleReady}>
               {ready ? "Not Ready" : "Ready"}
             </button>
 
             {isHost && (
-              <button onClick={handleStart} disabled={!allReady}>
+              <div style={{ margin: "12px 0" }}>
+                <label>
+                  Game mode:{" "}
+                  <select
+                    value={selectedMode}
+                    onChange={(e) => setSelectedMode(e.target.value)}
+                  >
+                    <option value="STORY">Story Mode</option>
+                    <option value="FREE">Free Play</option>
+                  </select>
+                </label>
+                {selectedMode === "FREE" && (
+                  <label>
+                    {" "}
+                    Map:{" "}
+                    <select
+                      value={selectedMap}
+                      onChange={(e) => setSelectedMap(e.target.value)}
+                    >
+                      <option value="bistro">Bistro</option>
+                      <option value="farm">Farm</option>
+                      <option value="kitchen">Kitchen</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+            {isHost && (
+              <button className="pl-btn" onClick={handleStart} disabled={!allReady}>
                 Start Game
               </button>
             )}
@@ -451,7 +509,7 @@ function Lobby() {
             BACK HOME
         ================================= */}
 
-        <button onClick={() => navigate("/Play")}>Back Home</button>
+        <button className="pl-btn" onClick={() => navigate("/Play")}>Back Home</button>
       </div>
     </div>
   );

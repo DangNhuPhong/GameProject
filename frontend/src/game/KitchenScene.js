@@ -216,6 +216,9 @@ export function createKitchenScene({
   mapId,
   mode = "coop-online",
   ui,
+  durationMs = null,
+  onRoundFinished = null,
+  onClockSync = null,
 }) {
   const mapCfg = getMapConfig(mapId);
   const modeCfg = GAME_MODES[mode] ?? GAME_MODES["coop-online"];
@@ -385,6 +388,7 @@ export function createKitchenScene({
           roomCode: roomId,
           mapId: cfg.id,
           mapJson,
+          durationMs,
         });
       } else {
         this.net = socket;
@@ -500,6 +504,24 @@ export function createKitchenScene({
       this.events.once(Phaser.Scenes.Events.DESTROY, cleanupNet);
 
       on("game-state", (state) => {
+        if (typeof onClockSync === "function") onClockSync(state.roundEndsAt);
+        if (
+          state.roundStatus === "FINISHED" &&
+          typeof onRoundFinished === "function"
+        ) {
+          onRoundFinished({
+            roundId: state.roundId,
+            mapId: state.mapId,
+            score: state.finalScore,
+            expiredPenalties: state.expiredPenalties,
+          });
+        }
+      });
+      on("map-finished", (result) => {
+        if (typeof onRoundFinished === "function") onRoundFinished(result);
+      });
+
+      on("game-state", (state) => {
         if (!state) return;
 
         Object.values(this.items).forEach((item) => {
@@ -563,6 +585,14 @@ export function createKitchenScene({
       // Vật phẩm bị xoá (vứt thùng rác / phục vụ xong) → hết bị "dính tay"
       on("item-removed", ({ itemId }) => {
         this.removeItemVisual(itemId);
+      });
+
+      on("order-expired", ({ order, penalty, score }) => {
+        if (typeof score === "number") this.setScore(score);
+        this.showToast(
+          `${order?.name || "Order"} expired! -${penalty ?? 0}`,
+          "#ef4444",
+        );
       });
 
       on("order-completed", ({ order, points, score, userId: who }) => {
@@ -857,7 +887,7 @@ export function createKitchenScene({
       this.score = value;
 
       if (this.hudScore) {
-        this.hudScore.textContent = `SCORE  ${value}`;
+        this.hudScore.textContent = `Score  ${value}`;
       }
     }
 
@@ -885,8 +915,8 @@ export function createKitchenScene({
       const gw = this.scale.width;
       const gh = this.scale.height;
 
-      // far: vừa khít để thấy trọn map
-      const fitZoom = Math.min(gw / this.worldW, gh / this.worldH);
+      // Far fills the viewport without stretching either axis.
+      const fitZoom = Math.max(gw / this.worldW, gh / this.worldH);
 
       if (this.zoomMode === "far") {
         return fitZoom;
@@ -910,7 +940,7 @@ export function createKitchenScene({
         // bỏ qua
       }
 
-      this.cameras.main.setZoom(this.computeZoom());
+      this.applyCameraZoom();
       this.updateZoomLabel();
     }
 
@@ -933,15 +963,21 @@ export function createKitchenScene({
       this.camTarget.y = (a.body.y + b.body.y) / 2;
     }
 
+    applyCameraZoom() {
+      const cam = this.cameras.main;
+      // Keep a uniform scale; camera bounds crop the overflow at the edges.
+      cam.setZoom(this.computeZoom());
+      cam.startFollow(this.camTarget, true, CAMERA_LERP, CAMERA_LERP);
+    }
+
     setupCamera() {
       const cam = this.cameras.main;
 
       cam.setBackgroundColor(this.mapCfg.background);
       cam.setBounds(0, 0, this.worldW, this.worldH);
-      cam.setZoom(this.computeZoom());
-      cam.startFollow(this.camTarget, true, CAMERA_LERP, CAMERA_LERP);
+      this.applyCameraZoom();
 
-      const onResize = () => cam.setZoom(this.computeZoom());
+      const onResize = () => this.applyCameraZoom();
       this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -962,7 +998,8 @@ export function createKitchenScene({
         "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:50;" +
         "font-family:'Trebuchet MS','Segoe UI',Verdana,sans-serif;font-weight:700;color:#fff;";
 
-      document.body.appendChild(root);
+      // Keep HUD and React menus in the same stacking context.
+      this.game.canvas.closest(".game-page").appendChild(root);
 
       const make = (css) => {
         const el = document.createElement("div");
@@ -978,9 +1015,10 @@ export function createKitchenScene({
       this.hudRoot = root;
 
       this.hudScore = make(
-        "background:#12302e;border-radius:.4em;padding:.2em .8em;transform:translate(-50%,-50%);",
+        "",
       );
-      this.hudScore.textContent = `SCORE  ${this.score}`;
+      this.hudScore.className = "gm-score";
+      this.hudScore.textContent = `Score  ${this.score}`;
 
       // Mỗi người chơi có một bong bóng gợi ý riêng
       this.players.forEach((p) => {
@@ -994,6 +1032,7 @@ export function createKitchenScene({
       this.hudZoom = make(
         "background:rgba(18,48,46,.85);border-radius:.4em;padding:.2em .6em;font-size:.8em;transform:translate(-100%,-100%);",
       );
+      this.hudZoom.className = "gm-zoom-hint";
       this.updateZoomLabel();
 
       this.stationLabels = {};
@@ -1044,8 +1083,6 @@ export function createKitchenScene({
       const fs = Phaser.Math.Clamp(Math.round(rect.height / 50), 12, 20);
       this.hudRoot.style.fontSize = `${fs}px`;
 
-      this.hudScore.style.left = `${rect.left + rect.width / 2}px`;
-      this.hudScore.style.top = `${rect.top + fs * 1.6}px`;
 
       this.hudZoom.style.left = `${rect.right - fs}px`;
       this.hudZoom.style.top = `${rect.bottom - fs}px`;
@@ -1241,7 +1278,7 @@ export function createKitchenScene({
           "border-radius:12px;padding:16px 18px;color:#fff;box-shadow:0 10px 36px rgba(0,0,0,.55);" +
           "font-family:'Trebuchet MS','Segoe UI',Verdana,sans-serif;";
 
-        document.body.appendChild(el);
+        this.game.canvas.closest(".game-page").appendChild(el);
 
         this.ordersEl = el;
 

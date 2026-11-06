@@ -1,0 +1,47 @@
+.wm-page { min-height:100dvh; padding:24px; background:#152824; color:#fff; font-family:"Trebuchet MS","Segoe UI",sans-serif; }
+.wm-header { display:flex; justify-content:space-between; align-items:center; gap:16px; max-width:1500px; margin:auto; }
+.wm-header h1 { margin:0; font-size:28px; } .wm-header p { color:#d1e4da; }
+.wm-map { position:relative; width:100%; max-width:1500px; margin:16px auto; border-radius:22px; overflow:hidden; box-shadow:0 15px 45px #0005; }
+.wm-map img { display:block; width:100%; height:auto; image-rendering:pixelated; }
+.wm-map svg { position:absolute; inset:0; width:100%; height:100%; }
+.wm-region { fill:transparent; stroke:transparent; stroke-width:4; cursor:pointer; transition:fill .16s,stroke .16s; }
+.wm-region.wm-active { fill:#fff79450; stroke:#fff3aa; filter:drop-shadow(0 0 8px #ffdf69); }
+.wm-region:focus-visible { outline:none; stroke:#fff; }
+.wm-region-label { text-anchor:middle; fill:white; font-size:23px; font-weight:bold; paint-order:stroke; stroke:#18332c; stroke-width:6px; stroke-linejoin:round; pointer-events:none; }
+.wm-info { max-width:1452px; margin:auto; min-height:80px; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 24px; border:1px solid #ffffff50; border-radius:20px; background:linear-gradient(135deg,#5a64587a,#16231f94); backdrop-filter:blur(18px); }
+.wm-info h2,.wm-info p { margin:4px 0; }
+.wm-page button { color:white; font:inherit; font-weight:bold; padding:12px 26px; background:#ffffff24; border:1px solid #ffffff60; border-radius:999px; cursor:pointer; }
+.wm-page button:disabled { opacity:.45; cursor:not-allowed; }
+.wm-error { color:#ffb4a9; }
+@media(max-width:600px) { .wm-page {padding:16px 10px;} .wm-header {align-items:flex-start;flex-direction:column;gap:0;} .wm-header h1 {font-size:23px;} .wm-region-label {font-size:26px;} }
+
+.wm-region.wm-selected { fill:#ffd75e55; stroke:#ffe16c; stroke-width:6; filter:drop-shadow(0 0 7px #ffcf50); }
+
+/* Full viewport map with controls floating above it. */
+.wm-page { position:fixed; inset:0; min-height:0; padding:0; overflow:hidden; }
+.wm-map { position:absolute; inset:0; width:100%; height:100%; max-width:none; margin:0; border-radius:0; box-shadow:none; }
+.wm-map svg { display:block; }
+.wm-header { position:absolute; z-index:2; top:20px; left:24px; right:24px; max-width:none; padding:14px 20px; border-radius:18px; background:#142b27b8; border:1px solid #ffffff50; backdrop-filter:blur(18px); pointer-events:none; }
+.wm-header h1 { font-size:26px; }
+.wm-header p { margin:5px 0; color:#fff; font-size:15px; text-shadow:0 1px 3px #000; }
+.wm-region-label { font-size:32px; font-weight:900; stroke:#102c25; stroke-width:8px; letter-spacing:.3px; filter:drop-shadow(0 2px 3px #0008); }
+.wm-info { position:absolute; z-index:2; bottom:24px; left:50%; transform:translateX(-50%); width:min(560px,calc(100% - 220px)); min-height:76px; margin:0; padding:14px 22px; background:#142b27d1; }
+.wm-info h2 { font-size:24px; }
+.wm-info p { font-size:15px; }
+.wm-back { position:absolute; z-index:2; bottom:32px; left:24px; background:#142b27d1 !important; backdrop-filter:blur(18px); }
+.wm-error { position:absolute; z-index:3; top:115px; left:24px; padding:12px; background:#541e28ee; border-radius:12px; }
+@media(max-width:600px) {
+ .wm-header { top:10px; left:10px; right:10px; padding:10px 14px; gap:0; }
+ .wm-header h1 {font-size:21px;} .wm-header p {font-size:12px;}
+ .wm-info {bottom:12px;left:auto;right:10px;transform:none;width:calc(100% - 105px);padding:10px 14px;gap:8px;}
+ .wm-info h2 {font-size:19px;} .wm-info p {font-size:12px;}
+ .wm-back {left:10px;bottom:25px;padding:10px 16px !important;}
+}
+
+.wm-header.wm-header-compact {
+  top:14px; left:14px; right:auto; width:auto;
+  display:flex; flex-direction:column; align-items:flex-start; gap:3px;
+  padding:10px 14px; border-radius:12px;
+}
+.wm-header-compact p { margin:0; font-size:12px; line-height:1.5; }
+.wm-header-compact .wm-score { font-size:15px; font-weight:700; }
