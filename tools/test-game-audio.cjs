@@ -22,16 +22,30 @@ const scene = {
   stations: { grill: { itemId: 'meat' }, oven: { itemId: 'pizza' } },
   items: { meat: { id: 'meat', status: 'raw' }, pizza: { id: 'pizza', bakeStatus: 'raw' } },
   sound: { locked: false, add(key) { return {
-    play() { played.push(key); }, once() {}, destroy() { this.destroyed = true; }, setVolume() {},
+    play() { played.push(key); }, once() {}, destroy() { this.destroyed = true; },
+    pause() { this.paused = true; }, resume() { this.paused = false; }, setVolume(value) { this.volume = value; },
   }; } },
 };
 const audio = new context.GameAudio(scene);
 audio.syncRound({ roundId: 1, roundEndsAt: now + 31000, roundStatus: 'PLAYING' });
 audio.update();
 assert.equal(audio.loops.size, 1, 'frying starts');
+const music = audio.music;
+assert.equal(music.volume, 0.25, 'music starts quietly');
+document.hidden = true; audio.onVisibility();
+assert.equal(music.paused, true, 'music pauses when tab is hidden');
+document.hidden = false; audio.onVisibility();
+assert.equal(music.paused, false, 'music resumes at the existing position');
+audio.onMusicVolume({ detail: 0 });
+assert.equal(music.paused, true, 'zero music volume pauses only music');
+audio.onMusicVolume({ detail: 0.4 });
+assert.equal(music.volume, 0.4);
+assert.equal(audio.volume, 0.65, 'effects volume stays independent');
+audio.update();
 const loop = audio.loops.get('grill');
 audio.update();
-assert.equal(played.filter(x => x === 'sfx-frying').length, 1, 'loop does not restart each frame');
+assert.equal(played.filter(x => x === 'sfx-frying').length, 2, 'loop restarts only after returning to tab');
+assert.equal(played.filter(x => x === 'background-music').length, 1, 'music never layers duplicate tracks');
 now += 1000; audio.update(); audio.update();
 assert.equal(played.filter(x => x === 'sfx-warning').length, 1, '30-second warning is once');
 scene.items.pizza.bakeStatus = 'cooked'; audio.update(); now += 1000; audio.update();
@@ -60,4 +74,5 @@ assert.equal(played.filter(x => x === 'sfx-tick').length, 2);
 now = audio.endsAt; audio.update(); audio.finish();
 assert.equal(played.filter(x => x === 'sfx-timeUp').length, 1);
 audio.destroy(); assert.equal(audio.oneshots.size, 0);
+assert.equal(music.destroyed, true, 'music is destroyed at round end');
 console.log('Passed station audio, loop cleanup, footsteps, countdown and finish checks.');

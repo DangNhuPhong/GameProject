@@ -9,9 +9,13 @@ import { quitRound } from "../services/storyApi";
 import { getMatch, getRecipes } from "../services/api";
 import { createKitchenScene } from "../game/KitchenScene";
 import { loadControlMode, saveControlMode } from "../game/gameControls";
-import { readEffectsVolume, saveEffectsVolume } from "../game/GameAudio";
+import {
+  readEffectsVolume,
+  saveEffectsVolume,
+  readMusicVolume,
+  saveMusicVolume,
+} from "../game/GameAudio";
 import { socket } from "../services/socket";
-
 
 import "./Game.css";
 
@@ -30,8 +34,6 @@ const MODE_TITLES = {
   "coop-local": "Local co-op",
   "coop-online": "Online co-op",
 };
-
-
 
 function Game({ mode = "coop-online" }) {
   const { roomCode, mapId: routeMapId } = useParams();
@@ -62,6 +64,7 @@ function Game({ mode = "coop-online" }) {
   const [menuView, setMenuView] = useState("main"); // "main" | "settings" | "tutorial"
   const [controlMode, setControlMode] = useState(loadControlMode);
   const [effectsVolume, setEffectsVolume] = useState(readEffectsVolume);
+  const [musicVolume, setMusicVolume] = useState(readMusicVolume);
 
   // Scene đọc trạng thái menu qua ref (không bị kẹt giá trị cũ)
   const menuOpenRef = useRef(false);
@@ -89,8 +92,14 @@ function Game({ mode = "coop-online" }) {
 
   const [quitting, setQuitting] = useState(false);
   const [quitError, setQuitError] = useState("");
-  const returnToSelection = () => navigate(offline ? `/world/${mode}` :
-    match?.game_mode === "STORY" ? `/world-online/${roomCode}` : `/lobby/${roomCode}`);
+  const returnToSelection = () =>
+    navigate(
+      offline
+        ? `/world/${mode}`
+        : match?.game_mode === "STORY"
+          ? `/world-online/${roomCode}`
+          : `/lobby/${roomCode}`,
+    );
   const handleQuit = async () => {
     if (quitting) return;
     setQuitting(true);
@@ -110,12 +119,25 @@ function Game({ mode = "coop-online" }) {
     const timer = setInterval(async () => {
       try {
         const { data } = await getMatch(roomCode);
-        if (active && (data.status === "WAITING" || data.round_status === "IDLE")) {
-          navigate(data.status !== "WAITING" && data.game_mode === "STORY" ? `/world-online/${roomCode}` : `/lobby/${roomCode}`, { replace: true });
+        if (
+          active &&
+          (data.status === "WAITING" || data.round_status === "IDLE")
+        ) {
+          navigate(
+            data.status !== "WAITING" && data.game_mode === "STORY"
+              ? `/world-online/${roomCode}`
+              : `/lobby/${roomCode}`,
+            { replace: true },
+          );
         }
-      } catch { /* Retry on next refresh. */ }
+      } catch {
+        /* Retry on next refresh. */
+      }
     }, 1000);
-    return () => { active = false; clearInterval(timer); };
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [offline, match, roomCode, navigate]);
 
   const closeMenu = () => setMenuOpen(false);
@@ -357,12 +379,15 @@ function Game({ mode = "coop-online" }) {
                 <div className="gm-title">Menu</div>
                 <div className="gm-note">{MODE_TITLES[mode]}</div>
 
-                <button className="gm-btn" onClick={() => setMenuView("tutorial")}>
-                  Tutorial
-                </button>
-
                 <button className="gm-btn" onClick={closeMenu}>
                   Resume
+                </button>
+
+                <button
+                  className="gm-btn"
+                  onClick={() => setMenuView("tutorial")}
+                >
+                  Tutorial
                 </button>
 
                 <button
@@ -383,25 +408,53 @@ function Game({ mode = "coop-online" }) {
                 >
                   {quitting ? "Leaving..." : "Quit game"}
                 </button>
-                {quitError && <p role="alert" className="gm-note">{quitError}</p>}
+                {quitError && (
+                  <p role="alert" className="gm-note">
+                    {quitError}
+                  </p>
+                )}
               </>
             ) : menuView === "tutorial" ? (
               <>
                 <div className="gm-title">Tutorial</div>
                 <div className="gm-controls" aria-label="Controls">
-                  <div><kbd>W A S D</kbd><span>Move up / left / down / right</span></div>
-                  <div><kbd>E</kbd><span>Interact / pick up</span></div>
-                  <div><kbd>Q</kbd><span>Drop item</span></div>
+                  <div>
+                    <kbd>W A S D</kbd>
+                    <span>Move up / left / down / right</span>
+                  </div>
+                  <div>
+                    <kbd>E</kbd>
+                    <span>Interact / pick up</span>
+                  </div>
+                  <div>
+                    <kbd>Q</kbd>
+                    <span>Drop item</span>
+                  </div>
                   {mode === "coop-local" ? (
-                    <div><kbd>↑ ← ↓ →</kbd><span>Player 2 · Enter: interact · Shift: drop</span></div>
+                    <div>
+                      <kbd>↑ ← ↓ →</kbd>
+                      <span>Player 2 · Enter: interact · Shift: drop</span>
+                    </div>
                   ) : (
-                    <div><kbd>Z</kbd><span>Near / Far zoom · or mouse wheel</span></div>
+                    <div>
+                      <kbd>Z</kbd>
+                      <span>Near / Far zoom · or mouse wheel</span>
+                    </div>
                   )}
-                  <div><kbd>F</kbd><span>Toggle fullscreen</span></div>
-                  <div><kbd>Esc</kbd><span>Open / close menu</span></div>
+                  <div>
+                    <kbd>F</kbd>
+                    <span>Toggle fullscreen</span>
+                  </div>
+                  <div>
+                    <kbd>Esc</kbd>
+                    <span>Open / close menu</span>
+                  </div>
                 </div>
                 {controlMode === "joystick" && mode !== "coop-local" && (
-                  <p className="gm-note">Drag the joystick to move. Use the E and Q buttons to interact and drop items.</p>
+                  <p className="gm-note">
+                    Drag the joystick to move. Use the E and Q buttons to
+                    interact and drop items.
+                  </p>
                 )}
                 <button className="gm-btn" onClick={() => setMenuView("main")}>
                   Back
@@ -410,6 +463,23 @@ function Game({ mode = "coop-online" }) {
             ) : (
               <>
                 <div className="gm-title">Settings</div>
+                <label className="gm-label" htmlFor="music-volume">
+                  Background music · {Math.round(musicVolume * 100)}%
+                </label>
+                <input
+                  id="music-volume"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={musicVolume}
+                  style={{ width: "100%", accentColor: "#ffd166" }}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setMusicVolume(value);
+                    saveMusicVolume(value);
+                  }}
+                />
                 <label className="gm-label" htmlFor="effects-volume">
                   Sound effects · {Math.round(effectsVolume * 100)}%
                 </label>
@@ -446,8 +516,6 @@ function Game({ mode = "coop-online" }) {
                     ))}
                   </div>
                 )}
-
-
 
                 <button className="gm-btn" onClick={() => setMenuView("main")}>
                   Back
