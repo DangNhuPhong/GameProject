@@ -4,7 +4,7 @@
 .wm-map { position:relative; width:100%; max-width:1500px; margin:16px auto; border-radius:22px; overflow:hidden; box-shadow:0 15px 45px #0005; }
 .wm-map img { display:block; width:100%; height:auto; image-rendering:pixelated; }
 .wm-map svg { position:absolute; inset:0; width:100%; height:100%; }
-.wm-region { fill:transparent; stroke:transparent; stroke-width:4; cursor:pointer; transition:fill .16s,stroke .16s; }
+.wm-region { fill:transparent; stroke:transparent; stroke-width:4; cursor:pointer; outline:none; transition:fill .16s,stroke .16s; }
 .wm-region.wm-active { fill:#fff79450; stroke:#fff3aa; filter:drop-shadow(0 0 8px #ffdf69); }
 .wm-region:focus-visible { outline:none; stroke:#fff; }
 .wm-region-label { text-anchor:middle; fill:white; font-size:23px; font-weight:bold; paint-order:stroke; stroke:#18332c; stroke-width:6px; stroke-linejoin:round; pointer-events:none; }
