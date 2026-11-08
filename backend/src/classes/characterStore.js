@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const CHARACTER_IDS = Object.freeze(["pepper", "mint", "sage"]);
+export const CHARACTER_IDS = Object.freeze(["pepper", "mint", "sage", "phong"]);
 export const normalizeCharacter = (id) => CHARACTER_IDS.includes(id) ? id : "pepper";
 
 // Separate from rounds so returning to the lobby and reconnecting keep the choice.
