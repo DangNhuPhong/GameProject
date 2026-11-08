@@ -4327,15 +4327,10 @@
           ]
         },
         {
+          "height": 16.2833215869046,
           "id": 6,
           "name": "grill",
-          "type": "station",
-          "x": 129.0768,
-          "y": 24.5891,
-          "width": 28.6837,
-          "height": 22.54,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4347,18 +4342,19 @@
               "type": "string",
               "value": "grill"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 28.6837,
+          "x": 128.816105066121,
+          "y": 20.1572861240574
         },
         {
+          "height": 16.992487446478,
           "id": 7,
           "name": "oven",
-          "type": "station",
-          "x": 161.8582,
-          "y": 20.4909,
-          "width": 29.7082,
-          "height": 26.6382,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4370,18 +4366,19 @@
               "type": "string",
               "value": "oven"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 29.7082,
+          "x": 163.161674669395,
+          "y": 22.8371544049108
         },
         {
+          "height": 15.4775784130954,
           "id": 8,
           "name": "cutting-board",
-          "type": "station",
-          "x": 139.7308,
-          "y": 66.5955,
-          "width": 15.3663,
-          "height": 9.2209,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4393,18 +4390,19 @@
               "type": "string",
               "value": "cutting-board"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 15.3663,
+          "x": 139.209410132242,
+          "y": 62.9457709256943
         },
         {
+          "height": 11.27,
           "id": 9,
           "name": "plate-station",
-          "type": "station",
-          "x": 181.3222,
-          "y": 64.5464,
-          "width": 12.293,
-          "height": 11.27,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4416,18 +4414,19 @@
               "type": "string",
               "value": "plate-station"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 12.293,
+          "x": 181.3222,
+          "y": 68.1961290743056
         },
         {
+          "height": 15.3682,
           "id": 10,
           "name": "trash-bin",
-          "type": "station",
-          "x": 208.9815,
-          "y": 69.0544,
-          "width": 13.3175,
-          "height": 15.3682,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4439,18 +4438,19 @@
               "type": "string",
               "value": "trash-bin"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 13.3175,
+          "x": 209.502889867758,
+          "y": 68.2723151983631
         },
         {
+          "height": 13.3191,
           "id": 11,
           "name": "order-station",
-          "type": "station",
-          "x": 155.7117,
-          "y": 148.5592,
-          "width": 13.3175,
-          "height": 13.3191,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4462,18 +4462,19 @@
               "type": "string",
               "value": "order-station"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 13.3175,
+          "x": 154.668920264484,
+          "y": 145.430860793452
         },
         {
+          "height": 7.1718,
           "id": 12,
           "name": "serving-counter",
-          "type": "station",
-          "x": 203.8594,
-          "y": 153.682,
-          "width": 11.2686,
-          "height": 7.1718,
-          "rotation": 0,
-          "visible": true,
+          "opacity": 1,
           "properties": [
             {
               "name": "id",
@@ -4485,7 +4486,13 @@
               "type": "string",
               "value": "serving-counter"
             }
-          ]
+          ],
+          "rotation": 0,
+          "type": "station",
+          "visible": true,
+          "width": 11.2686,
+          "x": 203.8594,
+          "y": 152.117830396726
         },
         {
           "id": 13,
