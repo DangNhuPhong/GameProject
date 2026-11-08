@@ -1,5 +1,5 @@
 import collisionUrl from "./collision-tiles.png";
-import bgUrl from "./bistro-bg.png";
+import bgUrl from "./classroom-bg.png";
 import localMapUrl from "./bistro.json?url";
 
 // Online: lấy map từ server (để server và client luôn dùng cùng một file map)
