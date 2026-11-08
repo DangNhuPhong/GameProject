@@ -11,6 +11,7 @@ const MAP_FILES = {
   kitchen: "kitchen.json",
   bistro: "bistro.json",
   farm: "farm.json",
+  sports: "sports.json",
 };
 
 const cache = {};
