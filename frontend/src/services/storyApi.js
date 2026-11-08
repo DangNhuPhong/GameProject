@@ -19,5 +19,6 @@ export const startStoryRound = (code, mapId) =>
   call(`${code}/story/start`, "POST", { mapId });
 
 export const quitRound = (code) => call(`${code}/quit`, "POST");
+export const selectCharacter = (code, characterId) => call(`${code}/character`, "PATCH", { characterId });
 
 export const returnRoomToLobby = (code) => call(`${code}/quit`, "POST", { destination: "lobby" });

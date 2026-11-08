@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import Phaser from "phaser";
 
 import { supabase } from "../lib/supabase";
@@ -18,6 +18,7 @@ import {
 import { socket } from "../services/socket";
 
 import "./Game.css";
+import { readStoryCharacters } from "../game/characters";
 
 import {
   useEscapeLockInFullscreen,
@@ -42,6 +43,7 @@ function Game({ mode = "coop-online" }) {
   const navigate = useNavigate();
 
   const gameRef = useRef(null);
+  const [characterSelections] = useState(() => offline ? readStoryCharacters(mode) : null);
 
   // Chỉ khóa ESC trong trang game; nhớ gọi trước mọi return sớm
   useEscapeLockInFullscreen();
@@ -201,7 +203,7 @@ function Game({ mode = "coop-online" }) {
   // =====================================
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || (offline && !characterSelections)) return;
     if (!user) return;
     if (!match) return;
     if (!gameRef.current) return;
@@ -216,6 +218,9 @@ function Game({ mode = "coop-online" }) {
       onRoundFinished: setResult,
       onClockSync: setClock,
       mode,
+      characterSelections: offline ? characterSelections : {
+        p1: match.players?.find((player) => player.user_id === user.id)?.character_id || "pepper",
+      },
       ui,
     });
 
@@ -286,6 +291,7 @@ function Game({ mode = "coop-online" }) {
       if (!offline) {
         [
           "game-state",
+          "character-roster",
           "item-created",
           "item-picked",
           "item-dropped",
@@ -315,7 +321,7 @@ function Game({ mode = "coop-online" }) {
 
       if (game) game.destroy(true);
     };
-  }, [loading, user, match, roomCode, ui, mode, offline]);
+  }, [loading, user, match, roomCode, ui, mode, offline, routeMapId, characterSelections]);
 
   // =====================================
   // LOADING
@@ -324,6 +330,8 @@ function Game({ mode = "coop-online" }) {
   if (loading) {
     return <div className="game-loading">Loading game...</div>;
   }
+
+  if (offline && !characterSelections) return <Navigate to={`/world/${mode}`} replace />;
 
   // =====================================
   // GAME UI

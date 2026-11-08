@@ -9,6 +9,7 @@ import {
   updateMode,
   startStoryRound,
   quitRound,
+  selectCharacter,
 } from "../controllers/matchController.js";
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.get("/:roomCode", getMatchByRoomCode);
 router.post("/:roomCode/join", joinMatch);
 
 router.patch("/:roomCode/ready", setPlayerReady);
+router.patch("/:roomCode/character", selectCharacter);
 
 router.post("/:roomCode/start", startMatch);
 router.post("/:roomCode/quit", quitRound);

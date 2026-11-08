@@ -9,3 +9,9 @@
 .lobby-card .ready { color: #b9f6be; }
 .lobby-card .not-ready { color: #ffe1a3; }
 .lobby-card .player > span:last-child { flex-shrink: 0; font-size: .75rem; }
+.player-identity { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.player-character-button { padding:7px 10px; border:1px solid #ffffff50; border-radius:9px; background:#ffffff14; color:inherit; font:inherit; font-size:.75rem; cursor:pointer; }
+.player-character-button:disabled { opacity:.5; cursor:default; }
+.player-character-button:focus-visible { outline:2px solid #ffd166; outline-offset:2px; }
+.lobby-character-popover { padding:12px; margin-top:8px; border:1px solid #ffffff40; border-radius:16px; background:#142321ee; }
+.lobby-character-popover .character-picker { margin:0 0 12px; }

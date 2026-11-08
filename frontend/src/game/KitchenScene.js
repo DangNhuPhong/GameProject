@@ -10,8 +10,7 @@ import itemsUrl from "../assets/items-pixel-v2.png";
 import dishesUrl from "../assets/dishes-pixel.png";
 import cookedPizzaUrl from "../assets/pizza-cooked-pixel.png";
 
-import chefBlueUrl from "../assets/chef-chibi-brown.png";
-import chefOrangeUrl from "../assets/chef-chibi-orange.png";
+import { CHARACTERS, getCharacter } from "./characters";
 import { createGameControls } from "./gameControls";
 
 // =====================================
@@ -54,8 +53,8 @@ export const KEYMAPS = {
 const ARROW_KEYS = { up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT" };
 
 const PLAYER_STYLE = {
-  p1: { spriteKey: "chef-blue", label: "P1", color: "#60a5fa" },
-  p2: { spriteKey: "chef-orange", label: "P2", color: "#fb923c" },
+  p1: { label: "P1", color: "#60a5fa" },
+  p2: { label: "P2", color: "#fb923c" },
 };
 
 // Hitbox chân người chơi
@@ -276,6 +275,7 @@ export function createKitchenScene({
   roomCode,
   mapId,
   mode = "coop-online",
+  characterSelections = {},
   ui,
   durationMs = null,
   onRoundFinished = null,
@@ -338,15 +338,9 @@ export function createKitchenScene({
         this.load.image(`${cfg.id}:${name}`, url),
       );
 
-      this.load.spritesheet("chef-blue", chefBlueUrl, {
-        frameWidth: CHEF_FRAME_W,
-        frameHeight: CHEF_FRAME_H,
-      });
-
-      this.load.spritesheet("chef-orange", chefOrangeUrl, {
-        frameWidth: CHEF_FRAME_W,
-        frameHeight: CHEF_FRAME_H,
-      });
+      CHARACTERS.forEach((character) => this.load.spritesheet(character.spriteKey, character.sheet, {
+        frameWidth: CHEF_FRAME_W, frameHeight: CHEF_FRAME_H,
+      }));
 
       this.load.spritesheet("items", itemsUrl, {
         frameWidth: 128,
@@ -467,8 +461,7 @@ export function createKitchenScene({
       // NHÂN VẬT CỦA NGƯỜI CHƠI TRÊN MÁY NÀY
       // =================================
 
-      createChefAnims(this, "chef-blue");
-      createChefAnims(this, "chef-orange");
+      CHARACTERS.forEach((character) => createChefAnims(this, character.spriteKey));
 
       this.players = modeCfg.locals.map((slot, index) =>
         this.createLocalPlayer(slot, index, spawn),
@@ -697,9 +690,21 @@ export function createKitchenScene({
         this.showToast(message, "#ef4444");
       });
 
-      on("player-position", ({ userId, x, y, t }) => {
+      on("character-roster", ({ players = [] }) => {
+        players.forEach(({ userId, characterId, x, y }) => {
+          const local = this.playerByUserId(userId);
+          if (local) {
+            local.spriteKey = getCharacter(characterId).spriteKey;
+            local.sprite.play(`${local.spriteKey}-idle-${local.facing}`, true);
+          } else if (Number.isFinite(x) && Number.isFinite(y)) {
+            this.updateOtherPlayer(userId, x, y, Date.now(), characterId);
+          }
+        });
+      });
+
+      on("player-position", ({ userId, x, y, t, characterId }) => {
         if (this.playerByUserId(userId)) return;
-        this.updateOtherPlayer(userId, x, y, t);
+        this.updateOtherPlayer(userId, x, y, t, characterId);
       });
 
       on("player-joined", ({ userId }) => {
@@ -745,7 +750,7 @@ export function createKitchenScene({
     // =====================================
 
     createLocalPlayer(slot, index, spawn) {
-      const style = PLAYER_STYLE[slot];
+      const style = { ...PLAYER_STYLE[slot], ...getCharacter(characterSelections[slot]) };
       const pos = this.findSpawnFor(index, spawn);
 
       const shadow = this.add
@@ -1252,7 +1257,8 @@ export function createKitchenScene({
     // OTHER PLAYERS (chỉ coop-online)
     // =====================================
 
-    updateOtherPlayer(userId, x, y, t) {
+    updateOtherPlayer(userId, x, y, t, characterId) {
+      const spriteKey = getCharacter(characterId).spriteKey;
       if (!this.otherPlayers[userId]) {
         const shadow = this.add
           .image(x, y + 8, "px-shadow")
@@ -1261,12 +1267,13 @@ export function createKitchenScene({
           .setDepth(4);
 
         const player = this.add
-          .sprite(x, y + CHEF_FOOT_OFFSET, "chef-orange", 0)
+          .sprite(x, y + CHEF_FOOT_OFFSET, spriteKey, 0)
           .setOrigin(0.5, 1)
           .setScale(CHEF_SCALE)
           .setDepth(5);
 
         this.otherPlayers[userId] = {
+          spriteKey,
           shadow,
           player,
           facing: "down",
@@ -1280,6 +1287,7 @@ export function createKitchenScene({
       }
 
       const other = this.otherPlayers[userId];
+      other.spriteKey = spriteKey;
 
       const sentAt = typeof t === "number" ? t : Date.now();
       const sample = Date.now() - sentAt;
@@ -2039,7 +2047,7 @@ export function createKitchenScene({
         other.shadow.y = Math.round(other.curY + 8);
 
         other.player.anims.play(
-          `chef-orange-${moving ? "walk" : "idle"}-${other.facing}`,
+          `${other.spriteKey}-${moving ? "walk" : "idle"}-${other.facing}`,
           true,
         );
       });

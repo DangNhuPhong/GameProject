@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import app from "./app.js";
 import { controller } from "./classes/gameRuntime.js";
 import { supabase } from "./config/supabase.js";
+import { characterStore } from "./classes/characterStore.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -27,6 +28,7 @@ const io = new Server(server, {
     methods: ["GET", "POST", "PATCH"],
   },
 });
+app.set("io", io);
 
 // ==========================================
 // GAME CONTROLLER
@@ -54,7 +56,7 @@ io.on("connection", (socket) => {
     toOthers: (roomCode, event, data) => socket.to(roomCode).emit(event, data),
     // volatile: gói cũ bị bỏ nếu client chưa kịp nhận, tránh dồn cục
     toOthersVolatile: (roomCode, event, data) =>
-      socket.to(roomCode).volatile.emit(event, data),
+      socket.to(roomCode).volatile.emit(event, event === "player-position" ? { ...data, characterId: characterStore.get(socket.data.matchId, data.userId) } : data),
     // Socket phải đúng phòng + đúng người chơi (chống giả mạo userId)
     verify: (roomCode, userId) =>
       socket.data.roomCode === roomCode && socket.data.userId === userId,
@@ -131,12 +133,14 @@ io.on("connection", (socket) => {
       .select("id")
       .eq("match_id", match.id)
       .eq("user_id", userId)
+      .is("left_at", null)
       .maybeSingle();
     if (!player)
       return socket.emit("interaction-error", { message: "Not a room member" });
     socket.join(normalizedRoomCode);
     socket.data.roomCode = normalizedRoomCode;
     socket.data.userId = userId;
+    socket.data.matchId = match.id;
     if (match.round_status === "PLAYING") {
       const existing = controller.rooms[normalizedRoomCode];
       if (!existing || existing.roundId !== match.round_id) {
@@ -152,6 +156,13 @@ io.on("connection", (socket) => {
       { roomCode: normalizedRoomCode, userId, mapId: match.current_map },
       ctx,
     );
+    const { data: members } = await supabase.from("match_players").select("user_id")
+      .eq("match_id", match.id).is("left_at", null);
+    socket.emit("character-roster", { players: (members || []).map((member) => ({
+      userId: member.user_id,
+      characterId: characterStore.get(match.id, member.user_id),
+      ...controller.positions.get(controller.positionKey(normalizedRoomCode, member.user_id)),
+    })) });
   });
 
   // ==========================================
