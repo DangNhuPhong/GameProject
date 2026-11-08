@@ -185,7 +185,8 @@ const CHEF_FOOT_OFFSET = 9;
 const CHEF_ROW = { down: 0, up: 1, side: 2 };
 
 function createChefAnims(scene, key) {
-  Object.entries(CHEF_ROW).forEach(([dir, row]) => {
+  const rows = key === "chef-phong" ? { ...CHEF_ROW, "side-right": 3 } : CHEF_ROW;
+  Object.entries(rows).forEach(([dir, row]) => {
     const base = row * 4;
 
     if (!scene.anims.exists(`${key}-idle-${dir}`)) {
@@ -208,6 +209,12 @@ function createChefAnims(scene, key) {
       });
     }
   });
+}
+
+function chefAnimationKey(key, moving, facing, flipped) {
+  // Phong has separate side profiles to preserve his single earring.
+  const direction = key === "chef-phong" && facing === "side" && flipped ? "side-right" : facing;
+  return `${key}-${moving ? "walk" : "idle"}-${direction}`;
 }
 
 function heldItemOffset(facing, facingRight) {
@@ -1307,6 +1314,8 @@ export function createKitchenScene({
 
         if (other.facing === "side") {
           other.player.setFlipX(mdx > 0);
+        } else {
+          other.player.setFlipX(false);
         }
       }
 
@@ -1992,6 +2001,8 @@ export function createKitchenScene({
 
       if (moving && p.facing === "side") {
         p.sprite.setFlipX(dx > 0);
+      } else if (p.facing !== "side") {
+        p.sprite.setFlipX(false);
       }
 
       p.sprite.x = Math.round(p.body.x);
@@ -2001,7 +2012,7 @@ export function createKitchenScene({
       p.shadow.y = p.body.y + 8;
 
       p.sprite.anims.play(
-        `${p.spriteKey}-${moving ? "walk" : "idle"}-${p.facing}`,
+        chefAnimationKey(p.spriteKey, moving, p.facing, p.sprite.flipX),
         true,
       );
     }
@@ -2047,7 +2058,7 @@ export function createKitchenScene({
         other.shadow.y = Math.round(other.curY + 8);
 
         other.player.anims.play(
-          `${other.spriteKey}-${moving ? "walk" : "idle"}-${other.facing}`,
+          chefAnimationKey(other.spriteKey, moving, other.facing, other.player.flipX),
           true,
         );
       });

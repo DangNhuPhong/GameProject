@@ -92,6 +92,32 @@ try {
   assert.equal(helpers.readStoryCharacters("coop-local"), null, "Starting a new story unlocks selection");
   helpers.confirmStoryCharacters("single", { p1: "mint", p2: "sage" });
   assert.deepEqual(helpers.readStoryCharacters("single"), { p1: "mint" });
+  session.removeItem("kitchen-story:single");
+  helpers.confirmStoryCharacters("single", { p1: "phong" });
+  assert.deepEqual(loadHelpers().readStoryCharacters("single"), { p1: "phong" }, "Phong remains selected across story reloads");
+  status = "WAITING";
+  assert.equal((await request("phong")).statusCode, 200, "Online accepts Phong");
+  assert.equal(createCharacterStore(filename).get("room1", "alice"), "phong");
+  assert.equal(broadcasts.at(-1).data.characterId, "phong");
+  remote.updateOtherPlayer("alice", 20, 30, Date.now(), "phong");
+  assert.equal(remote.otherPlayers.alice.spriteKey, "chef-phong", "Other players render Phong");
+  const animationSource = scene.slice(scene.indexOf("function createChefAnims("), scene.indexOf("function heldItemOffset("));
+  const animationHelpers = new Function(`const CHEF_ROW={down:0,up:1,side:2}; ${animationSource}; return { createChefAnims, chefAnimationKey };`)();
+  const animations = new Map();
+  animationHelpers.createChefAnims({ anims: { exists: (key) => animations.has(key), create: (config) => animations.set(config.key, config) } }, "chef-phong");
+  assert.equal(animations.get("chef-phong-idle-side-right").frames[0].frame, 12, "Right profile uses its separate asymmetric row");
+  assert.equal(animationHelpers.chefAnimationKey("chef-phong", true, "side", true), "chef-phong-walk-side-right");
+  assert.equal(animationHelpers.chefAnimationKey("chef-phong", false, "side", false), "chef-phong-idle-side");
+  assert.equal(animationHelpers.chefAnimationKey("chef-phong", false, "down", true), "chef-phong-idle-down");
+  assert.equal(animationHelpers.chefAnimationKey("chef-mint", true, "side", true), "chef-mint-walk-side");
+  const updateSpriteSource = scene.slice(scene.indexOf("    updatePlayerSprite("), scene.indexOf("    updateOtherPlayers("));
+  const SpriteMethods = new Function("chefAnimationKey", `const CHEF_FOOT_OFFSET=9;const chefFacing=()=>"down";return class {${updateSpriteSource}}`)(animationHelpers.chefAnimationKey);
+  let playedAnimation;
+  const localPhong = { spriteKey: "chef-phong", facing: "side", body: { x: 10, y: 20 }, shadow: {},
+    sprite: { flipX: true, setFlipX(value) { this.flipX = value; }, anims: { play(key) { playedAnimation = key; } } } };
+  new SpriteMethods().updatePlayerSprite(localPhong, 0, 1);
+  assert.equal(localPhong.sprite.flipX, false, "Facing front clears the sideways mirror to keep the earring on its intended side");
+  assert.equal(playedAnimation, "chef-phong-walk-down");
   console.log("Passed character persistence, room isolation, validation/auth, lobby broadcast and remote rendering checks.");
   console.log("Passed offline story selection, fixed P1/P2 identity, reload, progress and new-story reset checks.");
 } finally {
