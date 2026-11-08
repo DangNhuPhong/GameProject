@@ -80,7 +80,7 @@ export const createMatch = async (req, res) => {
         map,
         max_players,
         game_mode: "STORY",
-        current_map: "bistro",
+        current_map: "classroom",
         story_total: 0,
         round_status: "IDLE",
       })
@@ -497,13 +497,13 @@ export async function updateMode(req, res) {
     const { gameMode, mapId } = req.body;
     if (!["STORY", "FREE"].includes(gameMode))
       return res.status(400).json({ message: "Invalid mode" });
-    if (gameMode === "FREE" && !["bistro", "farm", "kitchen", "sports"].includes(mapId))
+    if (gameMode === "FREE" && !["classroom", "farm", "kitchen", "sports", "computer-room"].includes(mapId))
       return res.status(400).json({ message: "Invalid map" });
     const { data, error } = await supabase
       .from("matches")
       .update({
         game_mode: gameMode,
-        current_map: gameMode === "FREE" ? mapId : "bistro",
+        current_map: gameMode === "FREE" ? mapId : "classroom",
       })
       .eq("id", match.id)
       .select()
@@ -527,7 +527,7 @@ export async function startStoryRound(req, res) {
     const mapId = req.body.mapId;
     if (!canPlayStoryMap(mapId, match.story_total))
       return res.status(403).json({ message: "Map locked or unavailable" });
-    const durationMs = mapId === "bistro" ? 180000 : 180000;
+    const durationMs = mapId === "classroom" ? 180000 : 180000;
     const roundId = crypto.randomUUID();
     const { data, error } = await supabase
       .from("matches")

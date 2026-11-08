@@ -1,8 +1,8 @@
 // Story progression: Campus will be available after its map assets are added.
 export const STORY_MAPS = [
   {
-    id: "bistro",
-    name: "Bistro",
+    id: "classroom",
+    name: "Classroom",
     unlockScore: 0,
     durationMs: 180000,
     available: true,
@@ -17,6 +17,13 @@ export const STORY_MAPS = [
   {
     id: "sports",
     name: "Sports Ground",
+    unlockScore: 0,
+    durationMs: 180000,
+    available: true,
+  },
+  {
+    id: "computer-room",
+    name: "Computer Room",
     unlockScore: 0,
     durationMs: 180000,
     available: true,

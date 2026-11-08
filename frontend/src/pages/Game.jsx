@@ -211,7 +211,7 @@ function Game({ mode = "coop-online" }) {
     const KitchenScene = createKitchenScene({
       user,
       roomCode,
-      mapId: offline ? routeMapId : match.current_map || "bistro",
+      mapId: offline ? routeMapId : match.current_map || "classroom",
       durationMs: offline ? (routeMapId === "farm" ? 180000 : 180000) : null,
       onRoundFinished: setResult,
       onClockSync: setClock,

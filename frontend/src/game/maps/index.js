@@ -1,7 +1,9 @@
 import kitchen from "./kitchen/config";
-import bistro from "./bistro/config";
+import classroom from "./classroom/config";
 import farm from "./farm/config";
 import sports from "./sports/config";
 
-export const MAPS = { kitchen, bistro, farm, sports };
+import computerRoom from "./computer-room/config";
+
+export const MAPS = { kitchen, classroom, farm, sports, "computer-room": computerRoom };
 export const getMapConfig = (id) => MAPS[id] ?? MAPS.kitchen;
