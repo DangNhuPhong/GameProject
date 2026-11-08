@@ -86,7 +86,7 @@ const POSITION_SEND_INTERVAL = 50;
 
 // ⚠ Phải khớp với server
 const INTERACT_RANGE = 20;
-const PICKUP_RANGE = 24;
+const PICKUP_RANGE = 16;
 
 // Số thứ tự ô trong items.png (đếm từ trái sang phải, hết hàng thì xuống hàng dưới)
 const ITEM_FRAMES = {
@@ -1688,15 +1688,6 @@ export function createKitchenScene({
       // TAY TRỐNG
       // ---------------------------------
 
-      const floorItem = this.findNearbyItem(p);
-
-      if (floorItem) {
-        return {
-          label: `Pick up ${floorItem.type}`,
-          run: () => this.pickUpItem(p, floorItem.id),
-        };
-      }
-
       let best = null;
 
       const consider = (d, label, run) => {
@@ -1758,6 +1749,16 @@ export function createKitchenScene({
           () => this.takeIngredientFromShelf(p, shelf),
         );
       });
+
+      // Compare floor items after stations so stations win equal distances.
+      const floorItem = this.findNearbyItem(p);
+      if (floorItem) {
+        consider(
+          this.distanceTo(p, floorItem.x, floorItem.y),
+          `Pick up ${floorItem.type}`,
+          () => this.pickUpItem(p, floorItem.id),
+        );
+      }
 
       return best;
     }
