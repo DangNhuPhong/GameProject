@@ -537,6 +537,7 @@ function Lobby() {
                       <option value="farm">Farm</option>
                       <option value="sports">Sports Ground</option>
                       <option value="computer-room">Computer Room</option>
+                      <option value="library">Library</option>
                       <option value="kitchen">Kitchen</option>
                       <option value="library">Library</option>
                     </select>

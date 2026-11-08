@@ -14,4 +14,7 @@ export const MAPS = {
   library,
 };
 
+import library from "./library/config";
+
+export const MAPS = { kitchen, classroom, farm, sports, "computer-room": computerRoom, library };
 export const getMapConfig = (id) => MAPS[id] ?? MAPS.kitchen;
