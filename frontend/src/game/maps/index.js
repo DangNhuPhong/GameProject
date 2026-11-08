@@ -4,6 +4,7 @@ import farm from "./farm/config";
 import sports from "./sports/config";
 
 import computerRoom from "./computer-room/config";
+import library from "./library/config";
 
-export const MAPS = { kitchen, classroom, farm, sports, "computer-room": computerRoom };
+export const MAPS = { kitchen, classroom, farm, sports, "computer-room": computerRoom, library };
 export const getMapConfig = (id) => MAPS[id] ?? MAPS.kitchen;

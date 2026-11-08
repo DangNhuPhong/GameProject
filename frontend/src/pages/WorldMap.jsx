@@ -7,6 +7,8 @@ import worldMapImage from "../assets/world-map-clean.png";
 import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
+import CharacterPicker from "../components/CharacterPicker";
+import { readCharacter, readStoryCharacters, confirmStoryCharacters, getCharacter } from "../game/characters";
 
 const REGIONS = [
   {
@@ -18,7 +20,7 @@ const REGIONS = [
     y: 310,
   },
   {
-    id: "hall",
+    id: "library",
     name: "Library",
     points:
       "610.5864,408.7925 646.6963,386.9319 700,346 761.5916,349.769 795.5131,335.5596 829.4346,338.8387 856.7906,355.2341 845.8482,389.118 863.356,419.7228 861.1675,475.4672 838.1885,497.3278 780.1937,520.2813 735,533 695,526 664.2042,517.0023 624.8115,498.4208 600.7382,482.0254 603,427",
@@ -61,7 +63,9 @@ export default function WorldMap({ online = false }) {
   const [busy, setBusy] = useState(false);
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(null);
-  const canControl = !online || (Boolean(userId) && match?.host_id === userId);
+  const [storyCharacters, setStoryCharacters] = useState(() => online ? null : readStoryCharacters(mode));
+  const [characterSelections, setCharacterSelections] = useState(() => ({ p1: readCharacter("p1"), p2: readCharacter("p2") }));
+  const canControl = online ? (Boolean(userId) && match?.host_id === userId) : Boolean(storyCharacters);
   const activeRegion = REGIONS.find((region) => region.id === selected);
   useEffect(() => {
     if (!online || !userId) return;
@@ -200,10 +204,34 @@ export default function WorldMap({ online = false }) {
       setBusy(false);
     }
   }
+  if (!online && !storyCharacters) {
+    return <div className="character-offline"><div className="character-offline-panel">
+      <h1>Chọn đầu bếp của bạn</h1>
+      <p>Nhân vật đã chọn sẽ đồng hành cùng bạn xuyên suốt story.</p>
+      <CharacterPicker label={mode === "coop-local" ? "Người chơi 1 · WASD" : "Nhân vật của bạn"}
+        value={characterSelections.p1} onChange={(id) => setCharacterSelections((current) => ({ ...current, p1: id }))} />
+      {mode === "coop-local" && <CharacterPicker label="Người chơi 2 · Phím mũi tên"
+        value={characterSelections.p2} onChange={(id) => setCharacterSelections((current) => ({ ...current, p2: id }))} />}
+      {error && <p role="alert">{error}</p>}
+      <div className="character-offline-actions">
+        <button onClick={() => navigate("/play")}>Quay lại</button>
+        <button onClick={() => {
+          try { setStoryCharacters(confirmStoryCharacters(mode, characterSelections)); }
+          catch { setError("Không thể lưu lựa chọn. Vui lòng kiểm tra bộ nhớ trình duyệt."); }
+        }}>Chọn map</button>
+      </div>
+    </div></div>;
+  }
   return (
     <main className="wm-page">
       <header className="wm-header wm-header-compact">
         <p className="wm-score">Score · {total}</p>
+        {!online && <div className="story-character-lineup" aria-label="Nhân vật trong story">
+          {Object.entries(storyCharacters).map(([slot, id]) => <span key={slot}>
+            <img src={getCharacter(id).portrait} alt="" />
+            {slot.toUpperCase()} · {getCharacter(id).name}
+          </span>)}
+        </div>}
         <p>
           {canControl ? "W A S D · Select region" : "W A S D · Host selects"}
         </p>

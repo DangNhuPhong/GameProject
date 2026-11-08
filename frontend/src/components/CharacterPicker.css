@@ -1,0 +1,21 @@
+.character-picker { border:0; padding:0; margin:20px 0; min-width:0; color:inherit; }
+.character-picker legend { font-weight:700; margin-bottom:12px; }
+.character-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.character-card { display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 6px; border:2px solid #ffffff25; border-radius:16px; background:#142d32; color:#fff; cursor:pointer; font:inherit; }
+.character-card img { width:90px; height:112px; object-fit:contain; image-rendering:pixelated; }
+.character-card small { color:#cbd5df; font-size:11px; }
+.character-card span { color:var(--character-color); font-size:12px; }
+.character-card.selected { border-color:var(--character-color); background:#244447; box-shadow:0 0 0 2px #ffffff12; }
+.character-card:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+.character-picker:disabled { opacity:.65; }
+.character-offline { min-height:100dvh; display:grid; place-items:center; padding:24px; background:radial-gradient(ellipse at top,#285957,#101d2a); color:#fff; box-sizing:border-box; }
+.character-offline-panel { width:min(680px,100%); padding:24px; border:1px solid #ffffff30; border-radius:24px; background:#102c32e8; box-sizing:border-box; }
+.character-offline-panel h1 { font-size:26px; margin-top:0; }
+.character-offline-actions { display:flex; gap:12px; margin-top:20px; }
+.character-offline-actions button { flex:1; padding:14px; border:0; border-radius:12px; font:inherit; cursor:pointer; background:#ffd166; color:#182c31; font-weight:700; }
+.character-offline-actions button:first-child { background:#ffffff18; color:#fff; }
+.player-character-preview { width:40px; height:50px; object-fit:contain; image-rendering:pixelated; vertical-align:middle; margin-right:8px; }
+.story-character-lineup { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:12px; }
+.story-character-lineup span { display:flex; align-items:center; gap:6px; }
+.story-character-lineup img { width:28px; height:35px; object-fit:contain; image-rendering:pixelated; }
+@media(max-width:440px) { .character-card img { width:68px; height:88px; } .character-card small { display:none; } .character-offline-panel { padding:16px; } }

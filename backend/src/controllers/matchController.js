@@ -1,4 +1,5 @@
 import { controller } from "../classes/gameRuntime.js";
+import { characterStore, CHARACTER_IDS } from "../classes/characterStore.js";
 import { canPlayStoryMap } from "../classes/storyConfig.js";
 import { supabase } from "../config/supabase.js";
 
@@ -13,6 +14,29 @@ const generateRoomCode = () => {
 
   return code;
 };
+
+export async function selectCharacter(req, res) {
+  try {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error } = await supabase.auth.getUser(token || "");
+    if (error || !user) return res.status(401).json({ message: "Please sign in" });
+    const characterId = req.body.characterId;
+    if (!CHARACTER_IDS.includes(characterId)) return res.status(400).json({ message: "Invalid character" });
+    const { data: match } = await supabase.from("matches").select("id, status, room_code")
+      .eq("room_code", req.params.roomCode.trim().toUpperCase()).maybeSingle();
+    if (!match) return res.status(404).json({ message: "Room not found" });
+    const { data: member } = await supabase.from("match_players").select("id")
+      .eq("match_id", match.id).eq("user_id", user.id).is("left_at", null).maybeSingle();
+    if (!member) return res.status(403).json({ message: "Room members only" });
+    if (match.status !== "WAITING") return res.status(409).json({ message: "Choose your character in the lobby" });
+    characterStore.set(match.id, user.id, characterId);
+    req.app.get("io")?.to(match.room_code).emit("character-selected", { userId: user.id, characterId });
+    res.json({ data: { characterId } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Could not save character" });
+  }
+}
 
 export const createMatch = async (req, res) => {
   try {
@@ -174,7 +198,7 @@ export const getMatchByRoomCode = async (req, res) => {
 
     return res.json({
       success: true,
-      data: match,
+      data: { ...match, players: (match.players || []).map((player) => ({ ...player, character_id: characterStore.get(match.id, player.user_id) })) },
     });
   } catch (error) {
     console.error(error);
@@ -497,7 +521,7 @@ export async function updateMode(req, res) {
     const { gameMode, mapId } = req.body;
     if (!["STORY", "FREE"].includes(gameMode))
       return res.status(400).json({ message: "Invalid mode" });
-    if (gameMode === "FREE" && !["classroom", "farm", "kitchen", "sports", "computer-room"].includes(mapId))
+    if (gameMode === "FREE" && !["classroom", "farm", "kitchen", "sports", "computer-room", "library"].includes(mapId))
       return res.status(400).json({ message: "Invalid map" });
     const { data, error } = await supabase
       .from("matches")
