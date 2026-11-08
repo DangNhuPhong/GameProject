@@ -9,9 +9,10 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 // Thêm map mới: thêm một dòng vào đây
 const MAP_FILES = {
   kitchen: "kitchen.json",
-  bistro: "bistro.json",
+  classroom: "classroom.json",
   farm: "farm.json",
   sports: "sports.json",
+  "computer-room": "computer-room.json",
 };
 
 const cache = {};

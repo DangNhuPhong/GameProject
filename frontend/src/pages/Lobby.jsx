@@ -20,7 +20,7 @@ function Lobby() {
   const [ready, setReadyState] = useState(false);
   const [error, setError] = useState("");
   const [selectedMode, setSelectedMode] = useState("STORY");
-  const [selectedMap, setSelectedMap] = useState("bistro");
+  const [selectedMap, setSelectedMap] = useState("classroom");
 
   // =====================================
   // GO TO GAME
@@ -489,9 +489,10 @@ function Lobby() {
                       value={selectedMap}
                       onChange={(e) => setSelectedMap(e.target.value)}
                     >
-                      <option value="bistro">Bistro</option>
+                      <option value="classroom">Classroom</option>
                       <option value="farm">Farm</option>
                       <option value="sports">Sports Ground</option>
+                      <option value="computer-room">Computer Room</option>
                       <option value="kitchen">Kitchen</option>
                     </select>
                   </label>
