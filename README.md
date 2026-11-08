@@ -78,7 +78,7 @@ A hint above your character always shows what `E` will do right now.
 │       ├── maps/
 │       │   ├── index.js      # map registry + layout cache
 │       │   ├── readLayout.js # Tiled JSON -> layout (shelves, stations, spawn)
-│       │   ├── bistro.json
+│       │   ├── classroom.json
 │       │   └── kitchen.json
 │       ├── routes/  controllers/  services/  middleware/  config/
 │       └── ...
@@ -94,7 +94,7 @@ A hint above your character always shows what `E` will do right now.
             ├── KitchenScene.js      # Phaser scene: rendering, input, HUD
             ├── mapLoader.js         # Tiled map -> layout
             ├── stationBehaviors.js  # per-station client rules and labels
-            └── maps/                # per-map config (bistro, kitchen)
+            └── maps/                # per-map config (classroom, kitchen)
 ```
 
 ---
@@ -217,8 +217,8 @@ The map files live **only** in `backend/src/maps/`. The backend:
 The frontend map config points to that URL:
 
 ```js
-// frontend/src/game/maps/bistro/config.js
-const mapUrl = `${import.meta.env.VITE_API_URL}/api/maps/bistro`;
+// frontend/src/game/maps/classroom/config.js
+const mapUrl = `${import.meta.env.VITE_API_URL}/api/maps/classroom`;
 ```
 
 Do **not** keep a second copy of the JSON in the frontend, otherwise the client and the server can disagree about where stations are.
@@ -244,7 +244,7 @@ Optional properties on stations: `cookTime`, `burnTime`, `cutTime` (grill and cu
    ```js
    const MAP_FILES = {
      kitchen: "kitchen.json",
-     bistro: "bistro.json",
+     classroom: "classroom.json",
      yourmap: "yourmap.json",
    };
    ```
@@ -265,7 +265,7 @@ Both apps are deployed from the same GitHub repository.
 - **Start Command:** the command used locally, for example `node src/server.js`
 - **Environment:** the variables from `backend/.env`
 
-After deploying, check `https://<your-service>.onrender.com/` and `https://<your-service>.onrender.com/api/maps/bistro`.
+After deploying, check `https://<your-service>.onrender.com/` and `https://<your-service>.onrender.com/api/maps/classroom`.
 
 > Free Render services sleep when idle, so the first request after a while can take a few seconds. Game rooms live in server memory and are lost whenever the service restarts.
 
