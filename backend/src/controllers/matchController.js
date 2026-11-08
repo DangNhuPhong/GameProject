@@ -497,7 +497,7 @@ export async function updateMode(req, res) {
     const { gameMode, mapId } = req.body;
     if (!["STORY", "FREE"].includes(gameMode))
       return res.status(400).json({ message: "Invalid mode" });
-    if (gameMode === "FREE" && !["classroom", "farm", "kitchen", "sports", "computer-room"].includes(mapId))
+    if (gameMode === "FREE" && !["classroom", "farm", "kitchen", "sports", "computer-room", "library"].includes(mapId))
       return res.status(400).json({ message: "Invalid map" });
     const { data, error } = await supabase
       .from("matches")

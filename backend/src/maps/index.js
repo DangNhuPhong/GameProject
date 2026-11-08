@@ -12,6 +12,7 @@ const MAP_FILES = {
   classroom: "classroom.json",
   farm: "farm.json",
   sports: "sports.json",
+  library: "library.json",
   "computer-room": "computer-room.json",
 };
 
