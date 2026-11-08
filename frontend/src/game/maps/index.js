@@ -14,5 +14,4 @@ export const MAPS = {
   library,
 };
 
-import library from "./library/config";
 export const getMapConfig = (id) => MAPS[id] ?? MAPS.kitchen;
