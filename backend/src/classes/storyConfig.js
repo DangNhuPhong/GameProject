@@ -29,6 +29,13 @@ export const STORY_MAPS = [
     available: true,
   },
   {
+    id: "library",
+    name: "Library",
+    unlockScore: 0,
+    durationMs: 180000,
+    available: true,
+  },
+  {
     id: "campus",
     name: "Campus",
     unlockScore: 800,

@@ -42,7 +42,7 @@ const toRoom = (roomCode, event, data) => io.to(roomCode).emit(event, data);
 // ==========================================
 
 const worldMapHover = new Map();
-const worldRegionIds = new Set(["classroom", "farm", "hall", "computer-room", "campus", "sports"]);
+const worldRegionIds = new Set(["classroom", "farm", "library", "computer-room", "campus", "sports"]);
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
