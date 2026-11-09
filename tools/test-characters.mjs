@@ -108,6 +108,13 @@ try {
   assert.equal(createCharacterStore(filename).get("room1", "alice"), "faker");
   remote.updateOtherPlayer("alice", 20, 30, Date.now(), "faker");
   assert.equal(remote.otherPlayers.alice.spriteKey, "chef-faker");
+  session.removeItem("kitchen-story:single");
+  helpers.confirmStoryCharacters("single", { p1: "ronaldo" });
+  assert.deepEqual(loadHelpers().readStoryCharacters("single"), { p1: "ronaldo" });
+  assert.equal((await request("ronaldo")).statusCode, 200, "Online accepts Ronaldo");
+  assert.equal(createCharacterStore(filename).get("room1", "alice"), "ronaldo");
+  remote.updateOtherPlayer("alice", 20, 30, Date.now(), "ronaldo");
+  assert.equal(remote.otherPlayers.alice.spriteKey, "chef-ronaldo");
   const animationSource = scene.slice(scene.indexOf("function createChefAnims("), scene.indexOf("function heldItemOffset("));
   const animationHelpers = new Function(`const CHEF_ROW={down:0,up:1,side:2}; ${animationSource}; return { createChefAnims, chefAnimationKey };`)();
   const animations = new Map();

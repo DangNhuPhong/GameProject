@@ -27,9 +27,19 @@ function Lobby() {
   const [characterPickerOpen, setCharacterPickerOpen] = useState(false);
 
   useEffect(() => {
-    const onSelected = ({ userId, characterId }) => setMatch((current) => current ? ({
-      ...current, players: current.players.map((player) => player.user_id === userId ? { ...player, character_id: characterId } : player),
-    }) : current);
+    const onSelected = ({ userId, characterId }) =>
+      setMatch((current) =>
+        current
+          ? {
+              ...current,
+              players: current.players.map((player) =>
+                player.user_id === userId
+                  ? { ...player, character_id: characterId }
+                  : player,
+              ),
+            }
+          : current,
+      );
     socket.on("character-selected", onSelected);
     return () => socket.off("character-selected", onSelected);
   }, []);
@@ -42,9 +52,17 @@ function Lobby() {
       await selectCharacter(roomCode, id);
       setCharacterPickerOpen(false);
       saveCharacter("p1", id);
-      setMatch((current) => ({ ...current, players: current.players.map((player) => player.user_id === user.id ? { ...player, character_id: id } : player) }));
-    } catch (error) { setError(error.message); }
-    finally { setSavingCharacter(false); }
+      setMatch((current) => ({
+        ...current,
+        players: current.players.map((player) =>
+          player.user_id === user.id ? { ...player, character_id: id } : player,
+        ),
+      }));
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSavingCharacter(false);
+    }
   };
 
   // =====================================
@@ -251,7 +269,8 @@ function Lobby() {
         // JOIN ROOM
         // ================================
 
-        const joinRoom = () => socket.emit("join-room", { roomCode, userId: user.id });
+        const joinRoom = () =>
+          socket.emit("join-room", { roomCode, userId: user.id });
         socket.on("connect", joinRoom);
         if (socket.connected) joinRoom();
 
@@ -460,7 +479,11 @@ function Lobby() {
           Status: <strong>{match?.status}</strong>
         </p>
 
-        {error && <div className="room-error" role="alert">{error}</div>}
+        {error && (
+          <div className="room-error" role="alert">
+            {error}
+          </div>
+        )}
 
         {/* ================================
             PLAYERS
@@ -473,32 +496,64 @@ function Lobby() {
 
           {players.map((player) => (
             <div key={player.id}>
-            <div className="player">
-              <span className="player-identity">
-                <img className="player-character-preview" src={getCharacter(player.character_id).portrait} alt={getCharacter(player.character_id).name} />
-                {player.profiles?.username || "Unknown User"}
+              <div className="player">
+                <span className="player-identity">
+                  <img
+                    className="player-character-preview"
+                    src={getCharacter(player.character_id).portrait}
+                    alt={getCharacter(player.character_id).name}
+                  />
+                  {player.profiles?.username || "Unknown User"}
 
-                {player.user_id === match.host_id && " (Host)"}
-                {player.user_id === user?.id && match.status === "WAITING" && <button
-                  type="button" className="player-character-button"
-                  aria-expanded={characterPickerOpen} aria-controls="lobby-character-picker"
-                  disabled={savingCharacter || ready}
-                  title={ready ? "Bấm Not Ready để đổi nhân vật" : "Chọn nhân vật"}
-                  onClick={() => setCharacterPickerOpen((open) => !open)}>
-                  Chọn nhân vật
-                </button>}
-              </span>
+                  {player.user_id === match.host_id && " (Host)"}
+                  {player.user_id === user?.id &&
+                    match.status === "WAITING" && (
+                      <button
+                        type="button"
+                        className="player-character-button"
+                        aria-expanded={characterPickerOpen}
+                        aria-controls="lobby-character-picker"
+                        disabled={savingCharacter || ready}
+                        title={
+                          ready
+                            ? "Bấm Not Ready để đổi nhân vật"
+                            : "Chọn nhân vật"
+                        }
+                        onClick={() => setCharacterPickerOpen((open) => !open)}
+                      >
+                        Change
+                      </button>
+                    )}
+                </span>
 
-              <span className={player.ready ? "ready" : "not-ready"}>
-                {player.ready ? "READY" : "NOT READY"}
-              </span>
-            </div>
-            {player.user_id === user?.id && characterPickerOpen && match.status === "WAITING" && !ready && <section
-              id="lobby-character-picker" className="lobby-character-popover" aria-label="Chọn nhân vật của bạn">
-              <CharacterPicker value={player.character_id || "pepper"} onChange={handleCharacter} disabled={savingCharacter} />
-              <button type="button" className="player-character-button" disabled={savingCharacter}
-                onClick={() => setCharacterPickerOpen(false)}>Đóng</button>
-            </section>}
+                <span className={player.ready ? "ready" : "not-ready"}>
+                  {player.ready ? "READY" : "NOT READY"}
+                </span>
+              </div>
+              {player.user_id === user?.id &&
+                characterPickerOpen &&
+                match.status === "WAITING" &&
+                !ready && (
+                  <section
+                    id="lobby-character-picker"
+                    className="lobby-character-popover"
+                    aria-label="Chọn nhân vật của bạn"
+                  >
+                    <CharacterPicker
+                      value={player.character_id || "pepper"}
+                      onChange={handleCharacter}
+                      disabled={savingCharacter}
+                    />
+                    <button
+                      type="button"
+                      className="player-character-button"
+                      disabled={savingCharacter}
+                      onClick={() => setCharacterPickerOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </section>
+                )}
             </div>
           ))}
         </div>
@@ -509,7 +564,11 @@ function Lobby() {
 
         {match?.status === "WAITING" && (
           <>
-            <button className="pl-btn" onClick={handleReady} disabled={savingCharacter}>
+            <button
+              className="pl-btn"
+              onClick={handleReady}
+              disabled={savingCharacter}
+            >
               {ready ? "Not Ready" : "Ready"}
             </button>
 
@@ -546,7 +605,11 @@ function Lobby() {
               </div>
             )}
             {isHost && (
-              <button className="pl-btn" onClick={handleStart} disabled={!allReady || savingCharacter}>
+              <button
+                className="pl-btn"
+                onClick={handleStart}
+                disabled={!allReady || savingCharacter}
+              >
                 Start Game
               </button>
             )}
@@ -557,7 +620,9 @@ function Lobby() {
             BACK HOME
         ================================= */}
 
-        <button className="pl-btn" onClick={() => navigate("/Play")}>Back Home</button>
+        <button className="pl-btn" onClick={() => navigate("/Play")}>
+          Back Home
+        </button>
       </div>
     </div>
   );
