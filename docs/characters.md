@@ -13,3 +13,5 @@ Add characters in `frontend/src/game/characters.js` and the backend `CHARACTER_I
 Validation: `node tools/test-characters.mjs`, `node tools/test-item-interaction.mjs`, and `npm run build` in `frontend`.
 
 Phong uses a teal polo, cream trousers and parted brown hair based on the provided reference photographs. Phong wears a single stud on his anatomical left ear (viewer-right in front view). His sheet is 512×640: the third row is the studded left profile and the fourth row is a bare-ear left-oriented profile mirrored for right-facing movement. Front and back views explicitly clear horizontal flipping so walking sideways cannot swap the stud. Prepare it with `python tools/prepare_characters.py <source.png> phong --asymmetric`.
+
+Faker uses the approved wheelchair design with six stars in an arch and the supplied red emblem on his jersey and chair back. His 512x640 sheet has separate front, rear, left and right rows; side views show the stars edge-on. Rebuild the transparent assets with tools/prepare_faker.py and the approved four-view concept. Movement uses a subtle seated rolling bounce.

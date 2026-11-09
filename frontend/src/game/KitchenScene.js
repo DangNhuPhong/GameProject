@@ -185,7 +185,7 @@ const CHEF_FOOT_OFFSET = 9;
 const CHEF_ROW = { down: 0, up: 1, side: 2 };
 
 function createChefAnims(scene, key) {
-  const rows = key === "chef-phong" ? { ...CHEF_ROW, "side-right": 3 } : CHEF_ROW;
+  const rows = (key === "chef-phong" || key === "chef-faker") ? { ...CHEF_ROW, "side-right": 3 } : CHEF_ROW;
   Object.entries(rows).forEach(([dir, row]) => {
     const base = row * 4;
 
@@ -213,7 +213,7 @@ function createChefAnims(scene, key) {
 
 function chefAnimationKey(key, moving, facing, flipped) {
   // Phong has separate side profiles to preserve his single earring.
-  const direction = key === "chef-phong" && facing === "side" && flipped ? "side-right" : facing;
+  const direction = (key === "chef-phong" || key === "chef-faker") && facing === "side" && flipped ? "side-right" : facing;
   return `${key}-${moving ? "walk" : "idle"}-${direction}`;
 }
 

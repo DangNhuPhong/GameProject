@@ -6,12 +6,15 @@ import mintPortrait from "../assets/characters/mint-portrait.png";
 import sagePortrait from "../assets/characters/sage-portrait.png";
 import phong from "../assets/characters/phong.png";
 import phongPortrait from "../assets/characters/phong-portrait.png";
+import faker from "../assets/characters/faker.png";
+import fakerPortrait from "../assets/characters/faker-portrait.png";
 
 export const CHARACTERS = [
   { id: "pepper", name: "Pepper", description: "Đầu bếp năng động", sheet: pepper, portrait: pepperPortrait, spriteKey: "chef-pepper", color: "#f47b68" },
   { id: "mint", name: "Mint", description: "Cô nàng khéo tay", sheet: mint, portrait: mintPortrait, spriteKey: "chef-mint", color: "#51c6ae" },
   { id: "sage", name: "Sage", description: "Bếp trưởng kỳ cựu", sheet: sage, portrait: sagePortrait, spriteKey: "chef-sage", color: "#b4a0ed" },
   { id: "phong", name: "Phong", description: "Chàng trai áo xanh", sheet: phong, portrait: phongPortrait, spriteKey: "chef-phong", color: "#36c8de" },
+  { id: "faker", name: "Faker", description: "Tay đua sáu ngôi sao", sheet: faker, portrait: fakerPortrait, spriteKey: "chef-faker", color: "#ed2636" },
 ];
 export const getCharacter = (id) => CHARACTERS.find((character) => character.id === id) || CHARACTERS[0];
 export function readCharacter(slot = "p1") {
