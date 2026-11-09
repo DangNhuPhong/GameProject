@@ -10,6 +10,10 @@ import faker from "../assets/characters/faker.png";
 import fakerPortrait from "../assets/characters/faker-portrait.png";
 import ronaldo from "../assets/characters/ronaldo.png";
 import ronaldoPortrait from "../assets/characters/ronaldo-portrait.png";
+import trump from "../assets/characters/trump.png";
+import trumpPortrait from "../assets/characters/trump-portrait.png";
+import khaBanh from "../assets/characters/kha-banh.png";
+import khaBanhPortrait from "../assets/characters/kha-banh-portrait.png";
 
 export const CHARACTERS = [
   {
@@ -66,6 +70,8 @@ export const CHARACTERS = [
     spriteKey: "chef-ronaldo",
     color: "#d5ad54",
   },
+  { id: "trump", name: "Trump", description: "Quý ông cà vạt đỏ", sheet: trump, portrait: trumpPortrait, spriteKey: "chef-trump", color: "#d8ae57" },
+  { id: "kha-banh", name: "Khá Bảnh", description: "Mái tóc mullet đặc trưng", sheet: khaBanh, portrait: khaBanhPortrait, spriteKey: "chef-kha-banh", color: "#777078" },
 ];
 export const getCharacter = (id) =>
   CHARACTERS.find((character) => character.id === id) || CHARACTERS[0];
