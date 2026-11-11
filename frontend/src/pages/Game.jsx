@@ -6,7 +6,7 @@ import Phaser from "phaser";
 import { supabase } from "../lib/supabase";
 
 import { quitRound } from "../services/storyApi";
-import { getMatch, getRecipes } from "../services/api";
+import { getMatch } from "../services/api";
 import { createKitchenScene } from "../game/KitchenScene";
 import { loadControlMode, saveControlMode } from "../game/gameControls";
 import {
@@ -18,7 +18,9 @@ import {
 import { socket } from "../services/socket";
 
 import "./Game.css";
-import { readStoryCharacters } from "../game/characters";
+import { readCharacter, readStoryCharacters } from "../game/characters";
+import { TUTORIAL_STEPS } from "../game/TutorialGuide";
+import TutorialCard, { Keycap, MovementKeys } from "../components/TutorialCard";
 
 import {
   useEscapeLockInFullscreen,
@@ -31,6 +33,7 @@ import {
 //   "coop-local"  : 2 người chung máy, offline
 //   "coop-online" : qua server (mặc định, route /game/:roomCode)
 const MODE_TITLES = {
+  tutorial: "Kitchen tutorial",
   single: "Single player",
   "coop-local": "Local co-op",
   "coop-online": "Online co-op",
@@ -38,12 +41,21 @@ const MODE_TITLES = {
 
 function Game({ mode = "coop-online" }) {
   const { roomCode, mapId: routeMapId } = useParams();
+  const tutorial = mode === "tutorial";
   const offline = mode !== "coop-online";
 
   const navigate = useNavigate();
 
   const gameRef = useRef(null);
-  const [characterSelections] = useState(() => offline ? readStoryCharacters(mode) : null);
+  const phaserRef = useRef(null);
+  const [characterSelections] = useState(() => tutorial ? { p1: readCharacter() } : offline ? readStoryCharacters(mode) : null);
+  const [tutorialStep, setTutorialStep] = useState({ ...TUTORIAL_STEPS[0], index: 0, total: TUTORIAL_STEPS.length, done: false, promptOpen: true });
+  const [tutorialAttempt, setTutorialAttempt] = useState(0);
+  const restartTutorial = () => {
+    setTutorialStep({ ...TUTORIAL_STEPS[0], index: 0, total: TUTORIAL_STEPS.length, done: false, promptOpen: true });
+    setMenuOpen(false);
+    setTutorialAttempt((attempt) => attempt + 1);
+  };
 
   // Chỉ khóa ESC trong trang game; nhớ gọi trước mọi return sớm
   useEscapeLockInFullscreen();
@@ -51,11 +63,10 @@ function Game({ mode = "coop-online" }) {
 
   const [user, setUser] = useState(null);
   const [match, setMatch] = useState(null);
-  const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [clock, setClock] = useState(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
@@ -70,11 +81,13 @@ function Game({ mode = "coop-online" }) {
 
   // Scene đọc trạng thái menu qua ref (không bị kẹt giá trị cũ)
   const menuOpenRef = useRef(false);
+  const menuStateRef = useRef({ open: false, view: "main" });
   const modeRef = useRef(controlMode);
 
   useEffect(() => {
-    menuOpenRef.current = menuOpen;
-  }, [menuOpen]);
+    menuOpenRef.current = menuOpen || (tutorial && (tutorialStep.done || tutorialStep.promptOpen));
+    menuStateRef.current = { open: menuOpen, view: menuView };
+  }, [menuOpen, menuView, tutorial, tutorialStep.done, tutorialStep.promptOpen]);
 
   useEffect(() => {
     modeRef.current = controlMode;
@@ -84,19 +97,20 @@ function Game({ mode = "coop-online" }) {
     () => ({
       getMode: () => modeRef.current,
       isMenuOpen: () => menuOpenRef.current,
+      getMenuState: () => menuStateRef.current,
       toggleMenu: () => {
         setMenuView("main");
         setMenuOpen((open) => !open);
       },
     }),
-    [],
+    [setMenuOpen, setMenuView],
   );
 
   const [quitting, setQuitting] = useState(false);
   const [quitError, setQuitError] = useState("");
   const returnToSelection = () =>
     navigate(
-      offline
+      tutorial ? "/play" : offline
         ? `/world/${mode}`
         : match?.game_mode === "STORY"
           ? `/world-online/${roomCode}`
@@ -176,13 +190,11 @@ function Game({ mode = "coop-online" }) {
         }
 
         const matchResult = await getMatch(roomCode);
-        const recipeData = await getRecipes();
 
         if (!mounted) return;
 
         setUser(user);
         setMatch(matchResult.data);
-        setRecipes(recipeData);
         setLoading(false);
       } catch (error) {
         console.error("Game loading error:", error);
@@ -213,8 +225,9 @@ function Game({ mode = "coop-online" }) {
     const KitchenScene = createKitchenScene({
       user,
       roomCode,
-      mapId: offline ? routeMapId : match.current_map || "classroom",
-      durationMs: offline ? (routeMapId === "farm" ? 180000 : 180000) : null,
+      mapId: tutorial ? "kitchen" : offline ? routeMapId : match.current_map || "classroom",
+      durationMs: tutorial ? null : offline ? 180000 : null,
+      onTutorialStep: setTutorialStep,
       onRoundFinished: setResult,
       onClockSync: setClock,
       mode,
@@ -257,6 +270,7 @@ function Game({ mode = "coop-online" }) {
     };
 
     game = new Phaser.Game(config);
+    phaserRef.current = game;
     window.__game = game;
 
     const resizeGame = () => {
@@ -320,8 +334,9 @@ function Game({ mode = "coop-online" }) {
       if (!offline) socket.disconnect();
 
       if (game) game.destroy(true);
+      phaserRef.current = null;
     };
-  }, [loading, user, match, roomCode, ui, mode, offline, routeMapId, characterSelections]);
+  }, [loading, user, match, roomCode, ui, mode, offline, routeMapId, characterSelections, tutorial, tutorialAttempt]);
 
   // =====================================
   // LOADING
@@ -340,6 +355,21 @@ function Game({ mode = "coop-online" }) {
   return (
     <div className="game-page">
       <div ref={gameRef} className="phaser-container" />
+      {tutorial && !menuOpen && !tutorialStep.done && tutorialStep.promptOpen && (
+        <div className="gm-overlay gm-tutorial-overlay">
+          <TutorialCard
+            step={tutorialStep}
+            onContinue={() => phaserRef.current?.scene.getScene("KitchenScene")?.tutorialGuide?.continue()}
+            onRestart={restartTutorial}
+            onExit={() => navigate("/play")}
+          />
+        </div>
+      )}
+      {tutorial && tutorialStep.done && (
+        <div className="gm-overlay" style={{ zIndex: 9999 }}>
+          <TutorialCard step={tutorialStep} onRestart={restartTutorial} onExit={() => navigate("/play")} />
+        </div>
+      )}
       {Number.isFinite(clock) && !result && (
         <div
           className={`gm-round-clock${clock - now <= 30000 ? " gm-round-clock-urgent" : ""}`}
@@ -390,6 +420,11 @@ function Game({ mode = "coop-online" }) {
                 <button className="gm-btn" onClick={closeMenu}>
                   Resume
                 </button>
+                {tutorial && (
+                  <button className="gm-btn" onClick={restartTutorial}>
+                    Restart tutorial
+                  </button>
+                )}
 
                 <button
                   className="gm-btn"
@@ -427,34 +462,34 @@ function Game({ mode = "coop-online" }) {
                 <div className="gm-title">Tutorial</div>
                 <div className="gm-controls" aria-label="Controls">
                   <div>
-                    <kbd>W A S D</kbd>
+                    <MovementKeys />
                     <span>Move up / left / down / right</span>
                   </div>
                   <div>
-                    <kbd>E</kbd>
+                    <Keycap label="E" />
                     <span>Interact / pick up</span>
                   </div>
                   <div>
-                    <kbd>Q</kbd>
+                    <Keycap label="Q" />
                     <span>Drop item</span>
                   </div>
                   {mode === "coop-local" ? (
                     <div>
-                      <kbd>↑ ← ↓ →</kbd>
+                      <MovementKeys arrows />
                       <span>Player 2 · Enter: interact · Shift: drop</span>
                     </div>
                   ) : (
                     <div>
-                      <kbd>Z</kbd>
+                      <Keycap label="Z" />
                       <span>Near / Far zoom · or mouse wheel</span>
                     </div>
                   )}
                   <div>
-                    <kbd>F</kbd>
+                    <Keycap label="F" />
                     <span>Toggle fullscreen</span>
                   </div>
                   <div>
-                    <kbd>Esc</kbd>
+                    <Keycap label="Esc" />
                     <span>Open / close menu</span>
                   </div>
                 </div>

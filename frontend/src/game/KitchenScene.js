@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import GameAudio, { preloadGameAudio } from "./GameAudio";
 import { socket } from "../services/socket";
 import LocalTransport from "./LocalTransport";
+import { createTutorialGuide } from "./TutorialGuide";
 import { getMapConfig } from "./maps";
 import { readLayout, getProp } from "./mapLoader";
 import { STATION_BEHAVIORS } from "./stationBehaviors";
@@ -22,6 +23,7 @@ import { createGameControls } from "./gameControls";
 // =====================================
 
 export const GAME_MODES = {
+  tutorial: { offline: true, locals: ["p1"] },
   single: { offline: true, locals: ["p1"] },
   "coop-local": { offline: true, locals: ["p1", "p2"] },
   "coop-online": { offline: false, locals: ["p1"] },
@@ -287,6 +289,7 @@ export function createKitchenScene({
   durationMs = null,
   onRoundFinished = null,
   onClockSync = null,
+  onTutorialStep = null,
 }) {
   const mapCfg = getMapConfig(mapId);
   const modeCfg = GAME_MODES[mode] ?? GAME_MODES["coop-online"];
@@ -434,6 +437,7 @@ export function createKitchenScene({
       // =================================
 
       this.layout = readLayout(map);
+      if (cfg.id === "kitchen") this.createKitchenShelfIcons();
       this.audioEffects = new GameAudio(this);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.audioEffects.destroy());
 
@@ -459,6 +463,7 @@ export function createKitchenScene({
           mapId: cfg.id,
           mapJson,
           durationMs,
+          tutorial: mode === "tutorial",
         });
       } else {
         this.net = socket;
@@ -479,6 +484,9 @@ export function createKitchenScene({
       // =================================
 
       this.createHud();
+      if (mode === "tutorial") {
+        this.tutorialGuide = createTutorialGuide(this, onTutorialStep, ui);
+      }
 
       this.controls = createGameControls(this, {
         // Nút cảm ứng chỉ điều khiển người chơi 1
@@ -1386,6 +1394,7 @@ export function createKitchenScene({
       }
 
       this.renderOrders();
+      this.tutorialGuide?.showRecipe();
     }
 
     renderOrders() {
@@ -1436,7 +1445,7 @@ export function createKitchenScene({
         const remaining = Math.max(0, (order.remainingMs ?? 0) - elapsed);
         const seconds = Math.ceil(remaining / 1000);
         const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-        const ratio = order.durationMs
+        const ratio = mode === "tutorial" ? 1 : order.durationMs
           ? Math.min(1, remaining / order.durationMs)
           : 0;
 
@@ -1452,7 +1461,7 @@ export function createKitchenScene({
         name.textContent = `${i + 1}. ${order.name || order.recipeId}`;
 
         const time = document.createElement("span");
-        time.textContent = mmss;
+        time.textContent = mode === "tutorial" ? "No time limit" : mmss;
         time.style.color = remaining < 15000 ? "#ff6666" : "#9be7a5";
 
         line.append(name, time);
@@ -1522,9 +1531,6 @@ export function createKitchenScene({
 
     // Hành động người chơi p có thể làm ngay lúc này (hoặc null)
     findInteraction(p) {
-      const px = p.body.x;
-      const py = p.body.y;
-
       const special = this.layout.stations.filter((s) =>
         ["trash-bin", "order-station", "serving-counter"].includes(s.kind),
       );
@@ -1780,7 +1786,29 @@ export function createKitchenScene({
       return best;
     }
 
+    createKitchenShelfIcons() {
+      // Share the ingredient atlas with held items; cover the old counter glyphs.
+      this.layout.shelves.forEach((shelf) => {
+        this.add.rectangle(shelf.x, shelf.y, 30, 14, 0x62472f)
+          .setStrokeStyle(1, 0xc9a16a).setDepth(3.1);
+        this.add.rectangle(shelf.x, shelf.y, 26, 10, 0xb18c55).setDepth(3.2);
+        this.add.image(shelf.x, shelf.y, "items", itemFrame(shelf.type, "raw"))
+          .setDisplaySize(14, 14).setDepth(3.3);
+      });
+      // A visible menu board on the existing bottom counter, below player depth 5.
+      this.layout.stations.filter((s) => s.kind === "order-station").forEach((station) => {
+        this.add.rectangle(station.x, station.y, 28, 14, 0x493324)
+          .setStrokeStyle(1, 0xe7c48b).setDepth(3.1);
+        this.add.rectangle(station.x, station.y, 23, 11, 0xffefcd).setDepth(3.2);
+        this.add.text(station.x, station.y, "MENU", {
+          fontFamily: "monospace", fontSize: "6px", fontStyle: "bold", color: "#493324",
+        }).setOrigin(0.5).setDepth(3.3);
+      });
+    }
+
     handleInteract(p) {
+      // Consume the first E solely to dismiss the instruction, never to use a station.
+      if (this.tutorialGuide?.continue()) return;
       if (!p || this.controls?.menuOpen) return;
 
       // Bảng order đang mở: bấm interact luôn đóng được, không phụ thuộc khoảng cách
@@ -2124,6 +2152,7 @@ export function createKitchenScene({
 
     update(time, delta) {
       this.controls.sync();
+      this.tutorialGuide?.update(time);
 
       const stick = this.controls.getVector();
       const step = PLAYER_SPEED * (delta / 1000);

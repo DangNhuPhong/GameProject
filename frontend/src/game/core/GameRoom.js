@@ -153,6 +153,7 @@ class GameRoom {
   }
 
   updateOrders(now = Date.now()) {
+    if (this.tutorial) return this.orders;
     if (this.roundStatus !== "PLAYING") return this.orders;
     const activeOrders = [];
 
@@ -287,7 +288,7 @@ class GameRoom {
 
     // Điểm = 50 + số giây còn lại của đơn
     const remainingMs = Math.max(0, completed.expiresAt - Date.now());
-    const points = 50 + Math.round(remainingMs / 1000);
+    const points = this.tutorial ? 0 : 50 + Math.round(remainingMs / 1000);
 
     this.score += points;
 
