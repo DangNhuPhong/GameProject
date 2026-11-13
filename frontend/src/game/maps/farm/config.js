@@ -1,5 +1,5 @@
 import collisionUrl from "./collision-tiles.png";
-import bgUrl from "./farm-bg.png";
+import bgUrl from "./farm-bg-v2.png";
 import localMapUrl from "./farm.json?url";
 
 // Online: lấy map từ server

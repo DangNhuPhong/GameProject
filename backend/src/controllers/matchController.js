@@ -1,6 +1,6 @@
 import { controller } from "../classes/gameRuntime.js";
 import { characterStore, CHARACTER_IDS } from "../classes/characterStore.js";
-import { canPlayStoryMap } from "../classes/storyConfig.js";
+import { canPlayStoryMap, getStoryMap, summarizeCredits } from "../classes/storyConfig.js";
 import { supabase } from "../config/supabase.js";
 
 const generateRoomCode = () => {
@@ -549,9 +549,10 @@ export async function startStoryRound(req, res) {
     if (match.round_status === "PLAYING")
       return res.status(409).json({ message: "Round already active" });
     const mapId = req.body.mapId;
-    if (!canPlayStoryMap(mapId, match.story_total))
+    const credits = summarizeCredits(match.story_credits);
+    if (!canPlayStoryMap(mapId, credits.total, credits.mapBests))
       return res.status(403).json({ message: "Map locked or unavailable" });
-    const durationMs = mapId === "classroom" ? 180000 : 180000;
+    const durationMs = getStoryMap(mapId).durationMs;
     const roundId = crypto.randomUUID();
     const { data, error } = await supabase
       .from("matches")

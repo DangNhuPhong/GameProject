@@ -108,7 +108,8 @@ export default class GameController {
     const fn = this.handlers[eventName];
     if (!fn) return;
     const room = this.rooms[code(payload?.roomCode || "")];
-    if (room?.roundStatus === "FINISHED") return;
+    if (room?.roundStatus === "FINISHED" ||
+        (room?.roundEndsAt && Date.now() >= room.roundEndsAt)) return;
     fn(payload || {}, ctx);
   }
 
@@ -688,18 +689,25 @@ export default class GameController {
 
   async tick(toRoom) {
     for (const room of Object.values(this.rooms)) {
-      if (room.roundStatus === "FINISHED") continue;
-      if (room.roundEndsAt && Date.now() >= room.roundEndsAt) {
-        const result = room.finishRound();
-        if (result) {
-          if (this.onRoundFinished) {
-            try { await this.onRoundFinished(result); }
-            catch (err) { console.error("Saving round failed:", err); continue; }
-          }
-          toRoom(room.roomCode, "map-finished", result);
+      if (room.roundEndsAt && Date.now() >= room.roundEndsAt && room.roundStatus !== "FINISHED") {
+        room.pendingRoundResult = room.finishRound();
+      }
+      if (room.pendingRoundResult) {
+        if (room.savingResult || Date.now() < (room.retrySaveAt || 0)) continue;
+        room.savingResult = true;
+        try {
+          if (this.onRoundFinished) await this.onRoundFinished(room.pendingRoundResult);
+          toRoom(room.roomCode, "map-finished", room.pendingRoundResult);
+          room.pendingRoundResult = null;
+        } catch (err) {
+          console.error("Saving round failed; retrying:", err);
+          room.retrySaveAt = Date.now() + 3000;
+        } finally {
+          room.savingResult = false;
         }
         continue;
       }
+      if (room.roundStatus === "FINISHED") continue;
       const changed = room.update(
         (userId) =>
           this.positions.get(this.positionKey(room.roomCode, userId)) ?? null,

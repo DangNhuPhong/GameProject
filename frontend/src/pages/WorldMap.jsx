@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { STORY_MAPS, canPlayStoryMap } from "../game/storyConfig";
+import { STORY_MAPS, canPlayStoryMap, summarizeCredits, CREDIT_TARGET } from "../game/storyConfig";
 import { getMatch } from "../services/api";
 import { startStoryRound, returnRoomToLobby } from "../services/storyApi";
 import worldMapImage from "../assets/world-map-clean.png";
@@ -121,7 +121,13 @@ function WorldMapContent({ online }) {
     hasSeenWorldMapIntro(introScope) && (online || readStoryCharacters(mode))
       ? worldMapCloudVideo : worldMapIntroVideo,
   );
-  const [total, setTotal] = useState(0);
+  const [creditBests, setCreditBests] = useState(() => {
+    if (online) return {};
+    try {
+      return JSON.parse(sessionStorage.getItem(`kitchen-story:${mode}`) || "{}").creditBests || {};
+    } catch { return {}; }
+  });
+  const { total, passedMaps, graduated } = summarizeCredits(creditBests);
   const [match, setMatch] = useState(null);
   const [userId, setUserId] = useState(null);
   const [error, setError] = useState("");
@@ -252,14 +258,7 @@ function WorldMapContent({ online }) {
   }, [canControl, selected, changeRegion]);
 
   useEffect(() => {
-    if (!online) {
-      const data = JSON.parse(
-        sessionStorage.getItem(`kitchen-story:${mode}`) ||
-          '{"total":0,"completed":[]}',
-      );
-      setTotal(data.total || 0);
-      return;
-    }
+    if (!online) return;
     let alive = true;
     supabase.auth.getUser().then(({ data }) => {
       if (alive) setUserId(data.user?.id);
@@ -270,7 +269,7 @@ function WorldMapContent({ online }) {
         if (!alive) return;
         const m = response.data;
         setMatch(m);
-        setTotal(m.story_total || 0);
+        setCreditBests(m.story_credits || {});
         if (m.status === "WAITING") {
           navigate(`/lobby/${roomCode}`, { replace: true });
           return;
@@ -290,7 +289,7 @@ function WorldMapContent({ online }) {
   }, [online, mode, roomCode, navigate]);
 
   async function selectMap(map) {
-    if (!canPlayStoryMap(map.id, total) || busy) return;
+    if (!canPlayStoryMap(map.id, total, creditBests) || busy) return;
     if (!online) {
       navigate(
         mode === "coop-local"
@@ -369,7 +368,7 @@ function WorldMapContent({ online }) {
   return (
     <main className="wm-page">
       <header className="wm-header wm-header-compact">
-        <p className="wm-score">Score · {total}</p>
+        <p className="wm-score">Credits: {total} / {CREDIT_TARGET} · Maps passed: {passedMaps.length} / 5</p>
         {!online && (
           <div
             className="story-character-lineup"
@@ -392,6 +391,8 @@ function WorldMapContent({ online }) {
           {error}
         </p>
       )}
+      {graduated && (<section className="wm-graduation" role="status"><h2>Graduated!</h2><p>120 credits · All 5 maps passed</p><p>Campaign complete. Congratulations, Chef!</p></section>)}
+      <details className="wm-credit-rules"><summary>Credit rules</summary><p>Graduate with 120 credits and pass all 5 maps.</p><p>Pass: 18 credits. Best result per map: up to 30.</p><p>Hamburger +5 / expired −3; Pizza +6 / expired −4; Salad +3 / expired −2.</p><p>+1 bonus when served with at least half the order time remaining.</p><p>Retakes only add the improvement over your previous best.</p></details>
       <div className="wm-map">
         <svg
           viewBox="0 0 1672 941"
@@ -400,7 +401,7 @@ function WorldMapContent({ online }) {
         >
           <image href={worldMapImage} width="1672" height="941" />
           {REGIONS.map((region) => {
-            const unlocked = canPlayStoryMap(region.id, total);
+            const unlocked = canPlayStoryMap(region.id, total, creditBests);
             return (
               <g key={region.id}>
                 <polygon
@@ -436,18 +437,19 @@ function WorldMapContent({ online }) {
           <>
             <div>
               <h2>{activeRegion.name}</h2>
+              <p>Best: {creditBests[activeRegion.id] || 0} / 30 credits · {passedMaps.includes(activeRegion.id) ? "Passed" : "Pass: 18 credits"}</p>
               <p>
-                {canPlayStoryMap(activeRegion.id, total)
+                {canPlayStoryMap(activeRegion.id, total, creditBests)
                   ? "Unlocked"
                   : STORY_MAPS.find((map) => map.id === activeRegion.id)
                         ?.available
-                    ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} points`
+                    ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} credits and all previous maps passed`
                     : "Locked"}
               </p>
             </div>
             {canControl && (
               <button
-                disabled={busy || !canPlayStoryMap(activeRegion.id, total)}
+                disabled={busy || !canPlayStoryMap(activeRegion.id, total, creditBests)}
                 onClick={() => selectMap(activeRegion)}
               >
                 Play

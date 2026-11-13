@@ -72,4 +72,11 @@
   cursor:pointer;
 }
 .wm-intro-skip:hover { background:#254c43; }
+.wm-credit-rules { position:absolute; z-index:3; top:14px; right:14px; max-width:min(340px,80vw); padding:12px 16px; border-radius:12px; background:#142b27ed; color:#fff; font-size:13px; border:1px solid #ffffff60; }
+.wm-credit-rules summary { cursor:pointer; font-weight:bold; }
+.wm-credit-rules p { line-height:1.5; }
+.wm-graduation { position:absolute; z-index:4; top:25%; left:50%; transform:translateX(-50%); width:min(460px,85vw); padding:22px; text-align:center; border:3px solid #ffcf50; border-radius:18px; background:#173c30ed; color:#fff; box-shadow:0 0 45px #ffcf5050; }
+.wm-graduation h2 { color:#ffdf73; margin:0 0 10px; font-size:32px; }
+.wm-header-compact { max-width:calc(100vw - 160px); }
+@media(max-width:600px) { .wm-credit-rules { top:100px; } .wm-info { width:calc(100% - 120px); } }
 .wm-intro-skip:focus-visible { outline:3px solid #ffe16c; outline-offset:4px; }

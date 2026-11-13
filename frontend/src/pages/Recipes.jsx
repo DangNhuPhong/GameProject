@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRecipes } from "../services/api";
+import { CREDIT_RULES } from "../game/storyConfig";
 
 function Recipes() {
   const navigate = useNavigate();
@@ -49,9 +50,9 @@ function Recipes() {
           >
             <h2>{recipe.name}</h2>
 
-            <p>Score: {recipe.base_score}</p>
-
-            <p>Time limit: {recipe.time_limit}s</p>
+            <p>Credits: Hamburger +5 / −3 expired; Pizza +6 / −4; Salad +3 / −2</p>
+            <p>+1 credit for serving with at least half the time remaining.</p>
+            <p>Order time limits: {Object.entries(CREDIT_RULES).map(([name, rule]) => `${name}: ${rule.durationMs / 1000}s`).join(" · ")}</p>
           </div>
         ))}
       </div>

@@ -666,7 +666,7 @@ export function createKitchenScene({
         this.audioEffects.play("error", 0.45);
         if (typeof score === "number") this.setScore(score);
         this.showToast(
-          `${order?.name || "Order"} expired! -${penalty ?? 0}`,
+          `${order?.name || "Order"} expired! -${penalty ?? 0} credits`,
           "#ef4444",
         );
       });
@@ -681,11 +681,11 @@ export function createKitchenScene({
         let text;
 
         if (localPlayer && multiLocal) {
-          text = `${localPlayer.label} served ${name}! +${points ?? 0}`;
+          text = `${localPlayer.label} served ${name}! +${points ?? 0} credits`;
         } else if (localPlayer) {
-          text = `${name} served! +${points ?? 0}`;
+          text = `${name} served! +${points ?? 0} credits`;
         } else {
-          text = `Teammate served ${name}! +${points ?? 0}`;
+          text = `Teammate served ${name}! +${points ?? 0} credits`;
         }
 
         this.showToast(text, "#22c55e");
@@ -980,7 +980,7 @@ export function createKitchenScene({
       this.score = value;
 
       if (this.hudScore) {
-        this.hudScore.textContent = `Score  ${value}`;
+        this.hudScore.textContent = `Credits  ${value}`;
       }
     }
 
@@ -1111,7 +1111,7 @@ export function createKitchenScene({
         "",
       );
       this.hudScore.className = "gm-score";
-      this.hudScore.textContent = `Score  ${this.score}`;
+      this.hudScore.textContent = `Credits  ${this.score}`;
 
       // Mỗi người chơi có một bong bóng gợi ý riêng
       this.players.forEach((p) => {
