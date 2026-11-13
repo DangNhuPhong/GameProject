@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { resetWorldMapIntros } from "../game/worldMapIntro";
 import "./Play.css";
 
 function Play() {
@@ -72,6 +73,7 @@ function Play() {
             className="pl-btn"
             onClick={() => {
               sessionStorage.removeItem("kitchen-story:single");
+              resetWorldMapIntros();
               navigate("/world/single");
             }}
           >
@@ -81,12 +83,16 @@ function Play() {
             className="pl-btn"
             onClick={() => {
               sessionStorage.removeItem("kitchen-story:coop-local");
+              resetWorldMapIntros();
               navigate("/world/coop-local");
             }}
           >
             Local Co-op
           </button>
-          <button className="pl-btn" onClick={() => setView("online")}>
+          <button className="pl-btn" onClick={() => {
+            resetWorldMapIntros();
+            setView("online");
+          }}>
             Online Co-op
           </button>
           <button className="pl-btn pl-btn-back" onClick={() => navigate("/")}>

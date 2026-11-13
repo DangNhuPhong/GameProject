@@ -1,9 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { STORY_MAPS, canPlayStoryMap } from "../game/storyConfig";
 import { getMatch } from "../services/api";
 import { startStoryRound, returnRoomToLobby } from "../services/storyApi";
 import worldMapImage from "../assets/world-map-clean.png";
+import worldMapIntroVideo from "../assets/Animated_game_intro_sequence_11cc80e9.mp4";
+import worldMapCloudVideo from "../assets/world-map-cloud-reveal.mp4";
+import worldMapMusic from "../assets/audio/3-the-throne-room.mp3";
+import { hasSeenWorldMapIntro, markWorldMapIntroSeen } from "../game/worldMapIntro";
 import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
@@ -59,8 +63,64 @@ const REGIONS = [
 ];
 
 export default function WorldMap({ online = false }) {
+  const location = useLocation();
+  return <WorldMapContent key={location.key} online={online} />;
+}
+
+function WorldMapIntro({ src, onFinish }) {
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+      const video = videoRef.current;
+      const playWithSound = () => {
+        video.muted = false;
+        video.volume = 1;
+        // Retry on user interaction if the browser blocks audible autoplay.
+        video.play().catch(() => {});
+      };
+      playWithSound();
+      window.addEventListener("pointerdown", playWithSound);
+      window.addEventListener("keydown", playWithSound);
+      return () => {
+        window.removeEventListener("pointerdown", playWithSound);
+        window.removeEventListener("keydown", playWithSound);
+      };
+    }, []);
+
+    return (
+      <main className="wm-intro" aria-label="World map intro">
+        <video
+          ref={videoRef}
+          className="wm-intro-video"
+          src={src}
+          autoPlay
+          muted={false}
+          playsInline
+          controls={false}
+          disablePictureInPicture
+          preload="auto"
+          onEnded={onFinish}
+          onError={onFinish}
+        />
+        <button
+          className="wm-intro-skip"
+          onClick={onFinish}
+        >
+          Bỏ qua
+        </button>
+      </main>
+    );
+}
+
+function WorldMapContent({ online }) {
   const { mode, roomCode } = useParams();
+  const introScope = online ? `online:${roomCode}` : `offline:${mode}`;
   const navigate = useNavigate();
+  const [introFinished, setIntroFinished] = useState(false);
+  const [introSource] = useState(() =>
+    hasSeenWorldMapIntro(introScope) && (online || readStoryCharacters(mode))
+      ? worldMapCloudVideo : worldMapIntroVideo,
+  );
   const [total, setTotal] = useState(0);
   const [match, setMatch] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -75,9 +135,44 @@ export default function WorldMap({ online = false }) {
     p1: readCharacter("p1"),
     p2: readCharacter("p2"),
   }));
-  const canControl = online
+  const worldMapVisible = introFinished && (online || Boolean(storyCharacters));
+
+  useEffect(() => {
+    if (!worldMapVisible) return;
+
+    const music = new Audio(worldMapMusic);
+    music.loop = true;
+    music.volume = 0.5;
+    let disposed = false;
+    const playMusic = () => {
+      music.play().then(() => {
+        if (disposed) {
+          music.pause();
+          return;
+        }
+        window.removeEventListener("pointerdown", playMusic);
+        window.removeEventListener("keydown", playMusic);
+      }).catch(() => {
+        // Retry on interaction if audible autoplay is blocked.
+      });
+    };
+    window.addEventListener("pointerdown", playMusic);
+    window.addEventListener("keydown", playMusic);
+    playMusic();
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("pointerdown", playMusic);
+      window.removeEventListener("keydown", playMusic);
+      music.pause();
+      music.removeAttribute("src");
+      music.load();
+    };
+  }, [worldMapVisible]);
+
+  const canControl = introFinished && (online
     ? Boolean(userId) && match?.host_id === userId
-    : Boolean(storyCharacters);
+    : Boolean(storyCharacters));
   const activeRegion = REGIONS.find((region) => region.id === selected);
   useEffect(() => {
     if (!online || !userId) return;
@@ -258,6 +353,17 @@ export default function WorldMap({ online = false }) {
           </div>
         </div>
       </div>
+    );
+  }
+  if (!introFinished) {
+    return (
+      <WorldMapIntro
+        src={introSource}
+        onFinish={() => {
+          markWorldMapIntroSeen(introScope);
+          setIntroFinished(true);
+        }}
+      />
     );
   }
   return (

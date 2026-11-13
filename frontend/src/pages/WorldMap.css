@@ -45,3 +45,31 @@
 }
 .wm-header-compact p { margin:0; font-size:12px; line-height:1.5; }
 .wm-header-compact .wm-score { font-size:15px; font-weight:700; }
+.wm-intro {
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  display:grid;
+  place-items:center;
+  background:#000;
+}
+.wm-intro-video {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+.wm-intro-skip {
+  position:absolute;
+  top:max(20px,env(safe-area-inset-top));
+  right:max(20px,env(safe-area-inset-right));
+  padding:10px 22px;
+  border:1px solid #ffffff80;
+  border-radius:999px;
+  background:#142b27d9;
+  color:#fff;
+  font:600 16px "Segoe UI",sans-serif;
+  cursor:pointer;
+}
+.wm-intro-skip:hover { background:#254c43; }
+.wm-intro-skip:focus-visible { outline:3px solid #ffe16c; outline-offset:4px; }
