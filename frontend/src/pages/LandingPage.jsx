@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import CharacterShop from "../components/CharacterShop";
+import PlayHistory from "../components/PlayHistory";
 import "./LandingPage.css";
 
 function LandingPage() {
@@ -12,6 +13,7 @@ function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const menuRef = useRef(null);
   const userId = user?.id;
@@ -109,6 +111,13 @@ function LandingPage() {
       <div className="lp-menu-wrap" ref={menuRef}>
         <button type="button" className="lp-glass lp-shop-trigger" onClick={() => {
           setMenuOpen(false);
+          setShopOpen(false);
+          if (user) setHistoryOpen(true);
+          else navigate("/login");
+        }}>History</button>
+        <button type="button" className="lp-glass lp-shop-trigger" onClick={() => {
+          setMenuOpen(false);
+          setHistoryOpen(false);
           if (user) setShopOpen(true);
           else navigate("/login");
         }}>Shop</button>
@@ -170,6 +179,7 @@ function LandingPage() {
           onBalanceChange={(coins) => setProfile((current) => ({ ...current, coins }))}
         />
       )}
+      {historyOpen && user && <PlayHistory key={user.id} onClose={() => setHistoryOpen(false)} />}
       <button className="lp-glass lp-play" onClick={handlePlay}>
         Play
       </button>
