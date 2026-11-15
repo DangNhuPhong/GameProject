@@ -8,6 +8,8 @@ import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
 import CharacterPicker from "../components/CharacterPicker";
+import useOwnedCharacters from "../hooks/useOwnedCharacters";
+import { allowedCharacter, isLineupOwned } from "../game/characterAccess";
 import {
   readCharacter,
   readStoryCharacters,
@@ -68,13 +70,19 @@ export default function WorldMap({ online = false }) {
   const [busy, setBusy] = useState(false);
   const [hovered, setHovered] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [storyCharacters, setStoryCharacters] = useState(() =>
+  const access = useOwnedCharacters(!online);
+  const [storedCharacters, setStoryCharacters] = useState(() =>
     online ? null : readStoryCharacters(mode),
   );
   const [characterSelections, setCharacterSelections] = useState(() => ({
     p1: readCharacter("p1"),
     p2: readCharacter("p2"),
   }));
+  const storyCharacters = !access.loading && isLineupOwned(storedCharacters, access.ids, mode) ? storedCharacters : null;
+  const permittedSelections = {
+    p1: allowedCharacter(characterSelections.p1, access.ids),
+    p2: allowedCharacter(characterSelections.p2, access.ids, "mint"),
+  };
   const canControl = online
     ? Boolean(userId) && match?.host_id === userId
     : Boolean(storyCharacters);
@@ -221,17 +229,23 @@ export default function WorldMap({ online = false }) {
       <div className="character-offline">
         <div className="character-offline-panel">
           <h1>Choose your chef</h1>
+          {access.loading && <p role="status">Checking owned characters…</p>}
+          {access.error && <p role="alert">{access.error}</p>}
           <CharacterPicker
+            ownedIds={access.ids}
+            disabled={access.loading}
             label={mode === "coop-local" ? "Player 1 · WASD" : ""}
-            value={characterSelections.p1}
+            value={permittedSelections.p1}
             onChange={(id) =>
               setCharacterSelections((current) => ({ ...current, p1: id }))
             }
           />
           {mode === "coop-local" && (
             <CharacterPicker
+              ownedIds={access.ids}
+              disabled={access.loading}
               label="Payer 2 · Arrow button"
-              value={characterSelections.p2}
+              value={permittedSelections.p2}
               onChange={(id) =>
                 setCharacterSelections((current) => ({ ...current, p2: id }))
               }
@@ -239,12 +253,13 @@ export default function WorldMap({ online = false }) {
           )}
           {error && <p role="alert">{error}</p>}
           <div className="character-offline-actions">
-            <button onClick={() => navigate("/play")}>Quay lại</button>
+            <button onClick={() => navigate("/play")}>Back</button>
             <button
+              disabled={access.loading}
               onClick={() => {
                 try {
                   setStoryCharacters(
-                    confirmStoryCharacters(mode, characterSelections),
+                    confirmStoryCharacters(mode, permittedSelections, access.ids),
                   );
                 } catch {
                   setError(
@@ -253,7 +268,7 @@ export default function WorldMap({ online = false }) {
                 }
               }}
             >
-              Chọn map
+              Continue
             </button>
           </div>
         </div>

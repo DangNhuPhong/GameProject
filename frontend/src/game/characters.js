@@ -19,7 +19,7 @@ export const CHARACTERS = [
   {
     id: "pepper",
     name: "Pepper",
-    description: "Đầu bếp năng động",
+    description: "Energetic chef",
     sheet: pepper,
     portrait: pepperPortrait,
     spriteKey: "chef-pepper",
@@ -28,7 +28,7 @@ export const CHARACTERS = [
   {
     id: "mint",
     name: "Mint",
-    description: "Cô nàng khéo tay",
+    description: "Skillful cook",
     sheet: mint,
     portrait: mintPortrait,
     spriteKey: "chef-mint",
@@ -37,7 +37,7 @@ export const CHARACTERS = [
   {
     id: "sage",
     name: "Sage",
-    description: "Bếp trưởng kỳ cựu",
+    description: "Veteran head chef",
     sheet: sage,
     portrait: sagePortrait,
     spriteKey: "chef-sage",
@@ -70,8 +70,8 @@ export const CHARACTERS = [
     spriteKey: "chef-ronaldo",
     color: "#d5ad54",
   },
-  { id: "trump", name: "Trump", description: "Quý ông cà vạt đỏ", sheet: trump, portrait: trumpPortrait, spriteKey: "chef-trump", color: "#d8ae57" },
-  { id: "kha-banh", name: "Khá Bảnh", description: "Mái tóc mullet đặc trưng", sheet: khaBanh, portrait: khaBanhPortrait, spriteKey: "chef-kha-banh", color: "#777078" },
+  { id: "trump", name: "Trump", description: "US President", sheet: trump, portrait: trumpPortrait, spriteKey: "chef-trump", color: "#d8ae57" },
+  { id: "kha-banh", name: "Mr. Banh", description: "Prisoner", sheet: khaBanh, portrait: khaBanhPortrait, spriteKey: "chef-kha-banh", color: "#777078" },
 ];
 export const getCharacter = (id) =>
   CHARACTERS.find((character) => character.id === id) || CHARACTERS[0];
@@ -114,18 +114,21 @@ export function readStoryCharacters(mode) {
   }
 }
 
-export function confirmStoryCharacters(mode, selections) {
+export function confirmStoryCharacters(mode, selections, ownedIds = CHARACTERS.map((c) => c.id)) {
   const key = `kitchen-story:${mode}`;
   const progress = JSON.parse(
     sessionStorage.getItem(key) || '{"total":0,"completed":[]}',
   );
   // Once confirmed, returning from a round keeps the same players and characters.
   const existing = readStoryCharacters(mode);
-  if (existing) return existing;
+  if (existing && Object.values(existing).every((id) => ownedIds.includes(id))) return existing;
   const slots = mode === "coop-local" ? ["p1", "p2"] : ["p1"];
   const characters = Object.fromEntries(
     slots.map((slot) => [slot, getCharacter(selections[slot]).id]),
   );
+  if (Object.values(characters).some((id) => !ownedIds.includes(id))) {
+    throw new Error("Buy this character in the Shop before selecting it.");
+  }
   sessionStorage.setItem(key, JSON.stringify({ ...progress, characters }));
   slots.forEach((slot) => saveCharacter(slot, characters[slot]));
   return characters;

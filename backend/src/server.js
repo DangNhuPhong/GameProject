@@ -5,6 +5,7 @@ import app from "./app.js";
 import { controller } from "./classes/gameRuntime.js";
 import { supabase } from "./config/supabase.js";
 import { characterStore } from "./classes/characterStore.js";
+import { permittedCharacter } from "./services/characterAccess.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -158,11 +159,17 @@ io.on("connection", (socket) => {
     );
     const { data: members } = await supabase.from("match_players").select("user_id")
       .eq("match_id", match.id).is("left_at", null);
-    socket.emit("character-roster", { players: (members || []).map((member) => ({
+    const roster = await Promise.all((members || []).map(async (member) => {
+      const stored = characterStore.get(match.id, member.user_id);
+      const characterId = await permittedCharacter(member.user_id, stored);
+      if (stored !== characterId) characterStore.set(match.id, member.user_id, characterId);
+      return {
       userId: member.user_id,
-      characterId: characterStore.get(match.id, member.user_id),
+      characterId,
       ...controller.positions.get(controller.positionKey(normalizedRoomCode, member.user_id)),
-    })) });
+      };
+    }));
+    socket.emit("character-roster", { players: roster });
   });
 
   // ==========================================

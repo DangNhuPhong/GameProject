@@ -2,6 +2,7 @@ import { controller } from "../classes/gameRuntime.js";
 import { characterStore, CHARACTER_IDS } from "../classes/characterStore.js";
 import { canPlayStoryMap } from "../classes/storyConfig.js";
 import { supabase } from "../config/supabase.js";
+import { ownsCharacter, permittedCharacter } from "../services/characterAccess.js";
 
 const generateRoomCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -29,6 +30,13 @@ export async function selectCharacter(req, res) {
       .eq("match_id", match.id).eq("user_id", user.id).is("left_at", null).maybeSingle();
     if (!member) return res.status(403).json({ message: "Room members only" });
     if (match.status !== "WAITING") return res.status(409).json({ message: "Choose your character in the lobby" });
+    try {
+      if (!await ownsCharacter(user.id, characterId)) {
+        return res.status(403).json({ message: "Buy this character in the Shop before selecting it." });
+      }
+    } catch {
+      return res.status(503).json({ message: "Could not verify character ownership. Please try again." });
+    }
     characterStore.set(match.id, user.id, characterId);
     req.app.get("io")?.to(match.room_code).emit("character-selected", { userId: user.id, characterId });
     res.json({ data: { characterId } });
@@ -198,7 +206,9 @@ export const getMatchByRoomCode = async (req, res) => {
 
     return res.json({
       success: true,
-      data: { ...match, players: (match.players || []).map((player) => ({ ...player, character_id: characterStore.get(match.id, player.user_id) })) },
+      data: { ...match, players: await Promise.all((match.players || []).map(async (player) => ({
+        ...player, character_id: await permittedCharacter(player.user_id, characterStore.get(match.id, player.user_id)),
+      }))) },
     });
   } catch (error) {
     console.error(error);

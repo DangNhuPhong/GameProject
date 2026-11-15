@@ -19,6 +19,8 @@ import { socket } from "../services/socket";
 
 import "./Game.css";
 import { readCharacter, readStoryCharacters } from "../game/characters";
+import useOwnedCharacters from "../hooks/useOwnedCharacters";
+import { allowedCharacter, isLineupOwned } from "../game/characterAccess";
 import { TUTORIAL_STEPS } from "../game/TutorialGuide";
 import TutorialCard, { Keycap, MovementKeys } from "../components/TutorialCard";
 
@@ -48,7 +50,13 @@ function Game({ mode = "coop-online" }) {
 
   const gameRef = useRef(null);
   const phaserRef = useRef(null);
-  const [characterSelections] = useState(() => tutorial ? { p1: readCharacter() } : offline ? readStoryCharacters(mode) : null);
+  const access = useOwnedCharacters(offline);
+  const [storedSelections] = useState(() => tutorial ? { p1: readCharacter() } : offline ? readStoryCharacters(mode) : null);
+  const characterSelections = useMemo(() => {
+    if (access.loading) return null;
+    if (tutorial) return { p1: allowedCharacter(storedSelections?.p1, access.ids) };
+    return isLineupOwned(storedSelections, access.ids, mode) ? storedSelections : null;
+  }, [access.loading, access.ids, tutorial, storedSelections, mode]);
   const [tutorialStep, setTutorialStep] = useState({ ...TUTORIAL_STEPS[0], index: 0, total: TUTORIAL_STEPS.length, done: false, promptOpen: true });
   const [tutorialAttempt, setTutorialAttempt] = useState(0);
   const restartTutorial = () => {
@@ -342,7 +350,7 @@ function Game({ mode = "coop-online" }) {
   // LOADING
   // =====================================
 
-  if (loading) {
+  if (loading || (offline && access.loading)) {
     return <div className="game-loading">Loading game...</div>;
   }
 
