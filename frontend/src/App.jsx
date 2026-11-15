@@ -86,6 +86,7 @@ function App() {
 
         {/* Màn chọn chế độ: không cần đăng nhập (Single / Local chạy offline) */}
         <Route path="/play" element={<Play />} />
+        <Route path="/tutorial" element={<Game mode="tutorial" />} />
 
         {/* Chế độ offline: không cần đăng nhập, không cần server */}
         <Route

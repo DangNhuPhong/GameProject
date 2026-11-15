@@ -871,12 +871,35 @@
      "rotation": 0,
      "visible": true,
      "point": true
+    },
+    {
+     "id": 12,
+     "name": "Menu Board",
+     "type": "station",
+     "x": 208,
+     "y": 144,
+     "width": 32,
+     "height": 16,
+     "rotation": 0,
+     "visible": true,
+     "properties": [
+      {
+       "name": "id",
+       "type": "string",
+       "value": "order-station"
+      },
+      {
+       "name": "kind",
+       "type": "string",
+       "value": "order-station"
+      }
+     ]
     }
    ]
   }
  ],
  "nextlayerid": 5,
- "nextobjectid": 12,
+ "nextobjectid": 13,
  "orientation": "orthogonal",
  "renderorder": "right-down",
  "tiledversion": "1.10.2",

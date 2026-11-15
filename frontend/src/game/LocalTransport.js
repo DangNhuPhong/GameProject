@@ -29,7 +29,7 @@ export default class LocalTransport {
    * @param {string} opts.mapId
    * @param {object} opts.mapJson   nội dung file Tiled JSON của map
    */
-  constructor({ roomCode, mapId, mapJson, durationMs = 180000 }) {
+  constructor({ roomCode, mapId, mapJson, durationMs = 180000, tutorial = false }) {
     this.roomCode = roomCode;
     this.connected = true;
     this.listeners = new Map();
@@ -39,11 +39,23 @@ export default class LocalTransport {
     const layout = { id: mapId, ...readLayout(mapJson) };
 
     this.controller = new GameController({ getLayout: () => layout });
-    this.controller.configureRound(roomCode, {
+    const room = this.controller.configureRound(roomCode, {
       mapId,
       roundId: `local-${Date.now()}`,
-      durationMs,
+      durationMs: tutorial ? null : durationMs,
     });
+    if (tutorial) {
+      room.tutorial = true;
+      room.orders = [{
+        id: `${roomCode}-tutorial-burger`, recipeId: "hamburger",
+        name: "Hamburger", createdAt: Date.now(),
+        expiresAt: Number.MAX_SAFE_INTEGER, status: "waiting",
+      }];
+      // Give beginners time to read each instruction without burning food.
+      room.stations.forEach((station) => {
+        if ("burnTime" in station) station.burnTime = Number.MAX_SAFE_INTEGER;
+      });
+    }
 
     // Giống socket.volatile.emit
     this.volatile = { emit: (event, data) => this.emit(event, data) };

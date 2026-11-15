@@ -89,6 +89,9 @@ function Play() {
           <button className="pl-btn" onClick={() => setView("online")}>
             Online Co-op
           </button>
+          <button className="pl-btn" onClick={() => navigate("/tutorial")}>
+            Tutorial
+          </button>
           <button className="pl-btn pl-btn-back" onClick={() => navigate("/")}>
             Back
           </button>

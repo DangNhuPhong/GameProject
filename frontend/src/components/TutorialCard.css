@@ -1,0 +1,78 @@
+.tg-card {
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  color: #ecf5ed;
+  background: #153c37;
+  border: 1px solid #a9c6ac66;
+  border-radius: 24px;
+  box-shadow: 0 28px 100px #0009, inset 0 1px #fff2;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+.gm-overlay.gm-tutorial-overlay { z-index: 110; background: #071c247d; backdrop-filter: blur(5px); }
+.tg-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 24px 28px 14px; }
+.tg-eyebrow { color: #b8d6bd; letter-spacing: .16em; font-size: 10px; font-weight: 800; }
+.tg-counter { color: #ffdf8d; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.tg-progress { display: flex; gap: 5px; margin: 0 28px 20px; }
+.tg-progress span { flex: 1; height: 4px; border-radius: 4px; background: #ffffff18; }
+.tg-progress .is-complete { background: #86c7a3; }
+.tg-progress .is-current { background: #ffdc88; }
+.tg-visual { margin: 0 20px; padding: 20px 12px 12px; border-radius: 16px; border: 1px solid #c1d4b328; background: radial-gradient(ellipse at 50% 30%, #709e793d, transparent 75%), #0a2d29; text-align: center; }
+.tg-key { width: 42px; height: 46px; flex: 0 0 auto; display: inline-block; vertical-align: middle; }
+.tg-keyboard { display: inline-grid; grid-template-columns: repeat(3, 42px); gap: 3px; align-items: center; }
+.tg-keyboard-top { grid-column: 2; }
+.tg-keyboard > span:nth-child(2) { grid-column: 1; }
+.tg-movement, .tg-recipe { display: flex; align-items: center; justify-content: center; gap: 20px; min-height: 105px; }
+.tg-or { color: #adc9bc; font-size: 12px; }
+.tg-visual-caption { display: block; color: #a4c3ae; font-size: 9px; font-weight: 800; letter-spacing: .18em; margin-top: 15px; }
+.tg-item { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: #d1e2cf; }
+.tg-item-art { width: 76px; height: 76px; display: block; background-repeat: no-repeat; image-rendering: pixelated; filter: drop-shadow(0 7px 4px #0005); }
+.tg-recipe-part { display: flex; align-items: center; gap: 20px; }
+.tg-connector { color: #edce84; font-size: 23px; }
+.tg-menu-preview { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 105px; color: #ffdf8d; }
+.tg-recipe-book { margin: 20px 20px 0; padding: 16px; border: 1px solid #c1d4b328; border-radius: 16px; background: #0a2d29; }
+.tg-recipe-book h3 { margin: 0 0 12px; color: #fff3d3; font-size: 18px; }
+.tg-recipe-entry + .tg-recipe-entry { border-top: 1px solid #c1d4b328; margin-top: 16px; padding-top: 16px; }
+.tg-recipe-entry h4 { margin: 0 0 12px; color: #ffdf8d; }
+.tg-recipe-entry p { margin: 10px 0 0; color: #d2e1d7; font-size: 12px; line-height: 1.6; }
+.tg-recipe-entry .tg-recipe { flex-wrap: wrap; gap: 8px; min-height: 0; }
+.tg-recipe-entry .tg-recipe-part { gap: 8px; }
+.tg-recipe-entry .tg-item-art { width: 58px; height: 58px; }
+.tg-copy { padding: 22px 28px 0; }
+.tg-copy h2 { font-size: clamp(22px, 4vw, 30px); line-height: 1.15; letter-spacing: -.025em; margin: 0 0 12px; color: #fff3d3; }
+.tg-copy p { color: #d2e1d7; font-size: 14px; line-height: 1.65; margin: 0; }
+.tg-tip { display: flex; align-items: baseline; gap: 9px; color: #f0d99c; font-size: 12px; line-height: 1.5; margin-top: 16px; padding: 11px 13px; border-radius: 10px; background: #ffde8810; }
+.tg-controls-strip { display: flex; align-items: center; justify-content: center; gap: 9px; margin: 15px 28px 0; font-size: 11px; color: #bbd0c4; min-height: 30px; }
+.tg-controls-strip .tg-key { width: 25px; height: 28px; }
+.tg-controls-strip .tg-key:nth-of-type(2) { margin-left: 18px; }
+.tg-footer { padding: 12px 28px 24px; }
+.tg-note { font-size: 11px; text-align: center; color: #a3bdad; margin: 0 0 18px; }
+.tg-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tg-actions button { min-height: 44px; border-radius: 10px; cursor: pointer; font: 700 12px "Segoe UI", sans-serif; padding: 10px 14px; transition: background .15s; }
+.tg-secondary { color: #c3d7ca; background: transparent; border: 1px solid #9eb9ac44; }
+.tg-secondary:hover { background: #ffffff10; }
+.tg-primary { display: flex; align-items: center; justify-content: center; gap: 9px; margin-left: auto; color: #193b34; background: #ffdb87; border: 1px solid #ffe8b4; box-shadow: 0 3px 0 #bda15f; }
+.tg-primary:hover { background: #ffe7ae; }
+.tg-primary .tg-key { width: 23px; height: 25px; }
+.tg-actions button:focus-visible { outline: 3px solid #f6ebbf; outline-offset: 4px; }
+@media (max-width: 480px) {
+  .tg-header { padding: 20px 18px 12px; }
+  .tg-copy { padding: 18px 20px 0; }
+  .tg-footer { padding: 12px 20px 20px; }
+  .tg-progress { margin-left: 20px; margin-right: 20px; }
+  .tg-recipe, .tg-recipe-part { gap: 8px; }
+  .tg-item-art { width: 58px; height: 58px; }
+  .tg-item { font-size: 10px; }
+  .tg-actions .tg-primary { width: 100%; order: -1; margin-bottom: 6px; }
+  .tg-actions .tg-secondary { flex: 1; }
+}
+@media (max-height: 650px) and (min-width: 481px) {
+  .tg-header { padding-top: 15px; }
+  .tg-visual { padding-top: 12px; }
+  .tg-visual-caption { margin-top: 8px; }
+  .tg-copy { padding-top: 16px; }
+  .tg-footer { padding-bottom: 16px; }
+}
+
+.gm-controls .tg-keyboard { grid-template-columns: repeat(3, 25px); gap: 2px; }
+.gm-controls .tg-keyboard .tg-key { width: 25px; height: 28px; }
