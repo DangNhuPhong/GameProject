@@ -4,6 +4,7 @@ import IngredientShelf from "./IngredientShelf.js";
 import CookingStation from "./CookingStation.js";
 import CuttingStation from "./CuttingStation.js";
 import PizzaOvenStation from "./PizzaOvenStation.js";
+import { CREDIT_RULES } from "./storyConfig.js";
 
 // =====================================
 // LUẬT CỦA TỪNG LOẠI TRẠM (khoá theo "kind" trong Tiled)
@@ -112,17 +113,17 @@ class GameRoom {
       {
         recipeId: "hamburger",
         name: "Hamburger",
-        durationMs: 90000,
+        durationMs: CREDIT_RULES.hamburger.durationMs,
       },
       {
         recipeId: "pizza",
         name: "Pizza",
-        durationMs: 120000,
+        durationMs: CREDIT_RULES.pizza.durationMs,
       },
       {
         recipeId: "salad",
         name: "Salad",
-        durationMs: 60000,
+        durationMs: CREDIT_RULES.salad.durationMs,
       },
     ];
 
@@ -144,16 +145,12 @@ class GameRoom {
 
   getOrderExpirationPenalty(recipeId) {
     // Fixed penalty per expired order, independent of remaining time.
-    const penalties = {
-      hamburger: 50,
-      pizza: 75,
-      salad: 40,
-    };
-    return penalties[recipeId] ?? 50;
+    return CREDIT_RULES[recipeId]?.penalty ?? 3;
   }
 
   updateOrders(now = Date.now()) {
     if (this.roundStatus !== "PLAYING") return this.orders;
+    if (this.roundEndsAt) now = Math.min(now, this.roundEndsAt);
     const activeOrders = [];
 
     for (const order of this.orders) {
@@ -285,9 +282,10 @@ class GameRoom {
 
     this.removeItem(plate.id);
 
-    // Điểm = 50 + số giây còn lại của đơn
+    // Recipe credits plus one bonus for serving in the first half of the time limit.
     const remainingMs = Math.max(0, completed.expiresAt - Date.now());
-    const points = 50 + Math.round(remainingMs / 1000);
+    const points = CREDIT_RULES[recipe.id].credits +
+      (remainingMs >= completed.durationMs / 2 ? 1 : 0);
 
     this.score += points;
 
@@ -478,6 +476,7 @@ class GameRoom {
 
   finishRound() {
     if (this.roundStatus === "FINISHED") return null;
+    this.updateOrders(this.roundEndsAt ?? Date.now());
     this.roundStatus = "FINISHED";
     this.finalScore = this.score;
     return {
@@ -508,7 +507,7 @@ class GameRoom {
       orders: this.getOrders(),
       score: this.score,
       expiredPenalties: this.expiredPenalties,
-      roundStatus: this.roundStatus,
+      roundStatus: this.pendingRoundResult ? "SAVING" : this.roundStatus,
       roundEndsAt: this.roundEndsAt,
       roundId: this.roundId,
       finalScore: this.finalScore,
