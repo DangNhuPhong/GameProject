@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { getMatch, setReady, startMatch } from "../services/api";
 import { updateRoomMode, selectCharacter } from "../services/storyApi";
 import CharacterPicker from "../components/CharacterPicker";
+import useOwnedCharacters from "../hooks/useOwnedCharacters";
 import { getCharacter, saveCharacter } from "../game/characters";
 
 import { socket } from "../services/socket";
@@ -13,6 +14,7 @@ import "./Room.css";
 import "./Lobby.css";
 
 function Lobby() {
+  const access = useOwnedCharacters();
   const { roomCode } = useParams();
   const navigate = useNavigate();
 
@@ -45,7 +47,8 @@ function Lobby() {
   }, []);
 
   const handleCharacter = async (id) => {
-    if (savingCharacter) return;
+    if (savingCharacter || access.loading) return;
+    if (!access.ids.includes(id)) { setError("Buy this character in the Shop to unlock it."); return; }
     setSavingCharacter(true);
     setError("");
     try {
@@ -540,10 +543,13 @@ function Lobby() {
                     aria-label="Chọn nhân vật của bạn"
                   >
                     <CharacterPicker
+                      ownedIds={access.ids}
                       value={player.character_id || "pepper"}
                       onChange={handleCharacter}
-                      disabled={savingCharacter}
+                      disabled={savingCharacter || access.loading}
                     />
+                    {access.loading && <p role="status">Checking owned characters…</p>}
+                    {access.error && <p role="alert">{access.error}</p>}
                     <button
                       type="button"
                       className="player-character-button"

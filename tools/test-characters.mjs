@@ -21,7 +21,7 @@ try {
   // Execute the real HTTP handler with fake auth/database and broadcast boundaries.
   const source = fs.readFileSync(new URL("../backend/src/controllers/matchController.js", import.meta.url), "utf8");
   const handlerSource = source.slice(source.indexOf("export async function selectCharacter"), source.indexOf("export const createMatch"));
-  let auth = true, member = true, status = "WAITING";
+  let auth = true, member = true, status = "WAITING", owned = true, ownershipError = false;
   const broadcasts = [];
   const supabase = {
     auth: { getUser: async () => ({ data: { user: auth ? { id: "alice" } : null }, error: null }) },
@@ -31,7 +31,10 @@ try {
       return query;
     },
   };
-  const handler = new Function("supabase", "characterStore", "CHARACTER_IDS", `${handlerSource.replace("export ", "")}\nreturn selectCharacter;`)(supabase, store, CHARACTER_IDS);
+  const handler = new Function("supabase", "characterStore", "CHARACTER_IDS", "ownsCharacter", `${handlerSource.replace("export ", "")}\nreturn selectCharacter;`)(supabase, store, CHARACTER_IDS, async () => {
+    if (ownershipError) throw new Error("Database unavailable");
+    return owned;
+  });
   async function request(id) {
     const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(data) { this.body = data; return this; } };
     await handler({ headers: { authorization: "Bearer valid" }, body: { characterId: id }, params: { roomCode: "room" },
@@ -42,6 +45,12 @@ try {
   assert.equal(store.get("room1", "alice"), "sage");
   assert.deepEqual(broadcasts[0], { room: "ROOM", event: "character-selected", data: { userId: "alice", characterId: "sage" } });
   assert.equal((await request("fake")).statusCode, 400);
+  owned = false;
+  assert.equal((await request("faker")).statusCode, 403, "Unowned paid chefs are rejected by the HTTP endpoint");
+  assert.equal(store.get("room1", "alice"), "sage", "Rejected purchase access preserves selection");
+  owned = true; ownershipError = true;
+  assert.equal((await request("faker")).statusCode, 503, "Ownership query errors do not grant access");
+  ownershipError = false;
   auth = false; assert.equal((await request("mint")).statusCode, 401); auth = true;
   member = false; assert.equal((await request("mint")).statusCode, 403); member = true;
   status = "PLAYING"; assert.equal((await request("mint")).statusCode, 409);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import CharacterShop from "../components/CharacterShop";
 import "./LandingPage.css";
 
 function LandingPage() {
@@ -10,6 +11,7 @@ function LandingPage() {
   const [profile, setProfile] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
 
   const menuRef = useRef(null);
   const userId = user?.id;
@@ -35,7 +37,6 @@ function LandingPage() {
   // ===== Hồ sơ người chơi (chỉ tải khi đã đăng nhập) =====
   useEffect(() => {
     if (!userId) {
-      setProfile(null);
       return;
     }
 
@@ -43,7 +44,7 @@ function LandingPage() {
 
     supabase
       .from("profiles")
-      .select("username, level, coins, avatar")
+      .select("id, username, level, coins, avatar")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {
@@ -97,7 +98,7 @@ function LandingPage() {
   const handlePlay = () => navigate("/play");
 
   const displayName =
-    profile?.username || user?.email?.split("@")[0] || "Player";
+    (profile?.id === userId ? profile?.username : null) || user?.email?.split("@")[0] || "Player";
 
   return (
     <div className="lp-root">
@@ -106,14 +107,20 @@ function LandingPage() {
 
       {/* ===== Menu góc trên phải ===== */}
       <div className="lp-menu-wrap" ref={menuRef}>
+        <button type="button" className="lp-glass lp-shop-trigger" onClick={() => {
+          setMenuOpen(false);
+          if (user) setShopOpen(true);
+          else navigate("/login");
+        }}>Shop</button>
         <button
           className="lp-glass lp-menu-trigger"
           onClick={() => setMenuOpen((open) => !open)}
-          aria-label="Menu"
+          aria-label={user ? `User menu: ${displayName}` : "Menu"}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
         >
-          {user ? displayName.charAt(0).toUpperCase() : "👤"}
+          {user && <span className="lp-user-name">{displayName}</span>}
+          {!user && <span aria-hidden="true">☰</span>}
         </button>
 
         {menuOpen && (
@@ -157,6 +164,12 @@ function LandingPage() {
       </div>
 
       {/* ===== Nút Play ở giữa ===== */}
+      {shopOpen && user && (
+        <CharacterShop key={user.id} user={user}
+          onClose={() => setShopOpen(false)}
+          onBalanceChange={(coins) => setProfile((current) => ({ ...current, coins }))}
+        />
+      )}
       <button className="lp-glass lp-play" onClick={handlePlay}>
         Play
       </button>

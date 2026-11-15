@@ -4,9 +4,13 @@
 .character-card { display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 6px; border:2px solid #ffffff25; border-radius:16px; background:#142d32; color:#fff; cursor:pointer; font:inherit; }
 .character-card img { width:90px; height:112px; object-fit:contain; image-rendering:pixelated; }
 .character-card small { color:#cbd5df; font-size:11px; }
-.character-card span { color:var(--character-color); font-size:12px; }
-.character-card.selected { border-color:var(--character-color); background:#244447; box-shadow:0 0 0 2px #ffffff12; }
-.character-card:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+.character-card span { color:#ffd166; font-size:12px; }
+.character-card.selected { border-color:#ffd166; background:#3c3d2c; box-shadow:0 0 0 2px #ffd16633, 0 0 18px #ffd16626; }
+.character-card:focus-visible { outline:3px solid #ffd166; outline-offset:3px; }
+.character-card:disabled { opacity:.55; cursor:not-allowed; border-color:#ffffff15; box-shadow:none; }
+.character-card:disabled img { filter:grayscale(1); }
+.character-card .character-locked { display:block; color:#ffd166; font-weight:700; }
+.character-card:disabled > span { display:none; }
 .character-picker:disabled { opacity:.65; }
 .character-offline { min-height:100dvh; display:grid; place-items:center; padding:24px; background:radial-gradient(ellipse at top,#285957,#101d2a); color:#fff; box-sizing:border-box; }
 .character-offline-panel { width:min(680px,100%); padding:24px; border:1px solid #ffffff30; border-radius:24px; background:#102c32e8; box-sizing:border-box; }
