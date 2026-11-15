@@ -4,10 +4,9 @@ import { STORY_MAPS, canPlayStoryMap, summarizeCredits, CREDIT_TARGET } from "..
 import { getMatch } from "../services/api";
 import { startStoryRound, returnRoomToLobby } from "../services/storyApi";
 import worldMapImage from "../assets/world-map-clean.png";
-import worldMapIntroVideo from "../assets/Animated_game_intro_sequence_11cc80e9.mp4";
 import worldMapCloudVideo from "../assets/world-map-cloud-reveal.mp4";
 import worldMapMusic from "../assets/audio/3-the-throne-room.mp3";
-import { hasSeenWorldMapIntro, markWorldMapIntroSeen } from "../game/worldMapIntro";
+import { markWorldMapIntroSeen } from "../game/worldMapIntro";
 import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
@@ -117,10 +116,6 @@ function WorldMapContent({ online }) {
   const introScope = online ? `online:${roomCode}` : `offline:${mode}`;
   const navigate = useNavigate();
   const [introFinished, setIntroFinished] = useState(false);
-  const [introSource] = useState(() =>
-    hasSeenWorldMapIntro(introScope) && (online || readStoryCharacters(mode))
-      ? worldMapCloudVideo : worldMapIntroVideo,
-  );
   const [creditBests, setCreditBests] = useState(() => {
     if (online) return {};
     try {
@@ -357,7 +352,7 @@ function WorldMapContent({ online }) {
   if (!introFinished) {
     return (
       <WorldMapIntro
-        src={introSource}
+        src={worldMapCloudVideo}
         onFinish={() => {
           markWorldMapIntroSeen(introScope);
           setIntroFinished(true);

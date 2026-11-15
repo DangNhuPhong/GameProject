@@ -115,17 +115,25 @@
 /* ===== Menu góc trên phải ===== */
 .lp-menu-wrap {
   position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   top: 20px;
   right: 20px;
   z-index: 10;
 }
 
 .lp-menu-trigger {
-  width: 52px;
+  min-width: 52px;
+  max-width: min(260px, 55vw);
   height: 52px;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 18px;
   font-size: 1.25rem;
-  border-radius: 50%;
+  border-radius: 999px;
   cursor: pointer;
   transition:
     transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -135,6 +143,10 @@
 .lp-menu-trigger:hover {
   transform: scale(1.08);
 }
+
+.lp-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.lp-shop-trigger { padding: 0 22px; height: 52px; border-radius: 999px; cursor: pointer; font-size: 15px; color: #ffdf96; }
+.lp-shop-trigger:focus-visible { outline: 3px solid #ffd54a; outline-offset: 3px; }
 
 .lp-menu-panel {
   position: absolute;
