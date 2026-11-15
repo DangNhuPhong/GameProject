@@ -23,6 +23,7 @@ import useOwnedCharacters from "../hooks/useOwnedCharacters";
 import { allowedCharacter, isLineupOwned } from "../game/characterAccess";
 import { TUTORIAL_STEPS } from "../game/TutorialGuide";
 import TutorialCard, { Keycap, MovementKeys } from "../components/TutorialCard";
+import { applyCreditResult, getStoryMap, MAP_PASS_CREDITS, scoreContribution } from "../game/storyConfig";
 
 import {
   useEscapeLockInFullscreen,
@@ -234,7 +235,7 @@ function Game({ mode = "coop-online" }) {
       user,
       roomCode,
       mapId: tutorial ? "kitchen" : offline ? routeMapId : match.current_map || "classroom",
-      durationMs: tutorial ? null : offline ? 180000 : null,
+      durationMs: tutorial ? null : offline ? (getStoryMap(routeMapId)?.durationMs ?? 180000) : null,
       onTutorialStep: setTutorialStep,
       onRoundFinished: setResult,
       onClockSync: setClock,
@@ -582,8 +583,11 @@ function Game({ mode = "coop-online" }) {
           <div className="gm-panel gm-glass">
             <h2>Map Finished</h2>
             <p>Map: {result.mapId}</p>
-            <h1>Score: {result.score}</h1>
-            <p>Expired penalties: {result.expiredPenalties}</p>
+            <h1>Credits: {scoreContribution(result.score)} / 30</h1>
+            <p>{scoreContribution(result.score) >= MAP_PASS_CREDITS ? "Passed" : "Retake required"} — pass with {MAP_PASS_CREDITS} credits</p>
+            <p>Round balance: {result.score} credits</p>
+            <p>Expired order deductions: {result.expiredPenalties} credits</p>
+            <p>Only your best result per map counts. Retake to improve it.</p>
             <button
               className="gm-btn"
               onClick={() => {
@@ -592,12 +596,7 @@ function Game({ mode = "coop-online" }) {
                   const progress = JSON.parse(
                     sessionStorage.getItem(key) || '{"total":0,"completed":[]}',
                   );
-                  const id = result.roundId;
-                  if (!progress.completed.includes(id)) {
-                    progress.completed.push(id);
-                    progress.total += Math.max(0, Math.floor(result.score));
-                    sessionStorage.setItem(key, JSON.stringify(progress));
-                  }
+                  sessionStorage.setItem(key, JSON.stringify(applyCreditResult(progress, result)));
                   navigate(`/world/${mode}`);
                 } else {
                   navigate(

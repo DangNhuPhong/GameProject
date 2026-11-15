@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { STORY_MAPS, canPlayStoryMap } from "../game/storyConfig";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { STORY_MAPS, canPlayStoryMap, summarizeCredits, CREDIT_TARGET } from "../game/storyConfig";
 import { getMatch } from "../services/api";
 import { startStoryRound, returnRoomToLobby } from "../services/storyApi";
 import worldMapImage from "../assets/world-map-clean.png";
+import worldMapCloudVideo from "../assets/world-map-cloud-reveal.mp4";
+import worldMapMusic from "../assets/audio/3-the-throne-room.mp3";
+import { markWorldMapIntroSeen } from "../game/worldMapIntro";
 import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
@@ -61,9 +64,67 @@ const REGIONS = [
 ];
 
 export default function WorldMap({ online = false }) {
+  const location = useLocation();
+  return <WorldMapContent key={location.key} online={online} />;
+}
+
+function WorldMapIntro({ src, onFinish }) {
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+      const video = videoRef.current;
+      const playWithSound = () => {
+        video.muted = false;
+        video.volume = 1;
+        // Retry on user interaction if the browser blocks audible autoplay.
+        video.play().catch(() => {});
+      };
+      playWithSound();
+      window.addEventListener("pointerdown", playWithSound);
+      window.addEventListener("keydown", playWithSound);
+      return () => {
+        window.removeEventListener("pointerdown", playWithSound);
+        window.removeEventListener("keydown", playWithSound);
+      };
+    }, []);
+
+    return (
+      <main className="wm-intro" aria-label="World map intro">
+        <video
+          ref={videoRef}
+          className="wm-intro-video"
+          src={src}
+          autoPlay
+          muted={false}
+          playsInline
+          controls={false}
+          disablePictureInPicture
+          preload="auto"
+          onEnded={onFinish}
+          onError={onFinish}
+        />
+        <button
+          className="wm-intro-skip"
+          onClick={onFinish}
+        >
+          Bỏ qua
+        </button>
+      </main>
+    );
+}
+
+function WorldMapContent({ online }) {
   const { mode, roomCode } = useParams();
+  const introScope = online ? `online:${roomCode}` : `offline:${mode}`;
   const navigate = useNavigate();
-  const [total, setTotal] = useState(0);
+  const [introFinished, setIntroFinished] = useState(false);
+  const [creditBests, setCreditBests] = useState(() => {
+    if (online) return {};
+    try {
+      return JSON.parse(sessionStorage.getItem(`kitchen-story:${mode}`) || "{}").creditBests || {};
+    } catch { return {}; }
+  });
+  const { total, passedMaps, graduated } = summarizeCredits(creditBests);
   const [match, setMatch] = useState(null);
   const [userId, setUserId] = useState(null);
   const [error, setError] = useState("");
@@ -83,9 +144,44 @@ export default function WorldMap({ online = false }) {
     p1: allowedCharacter(characterSelections.p1, access.ids),
     p2: allowedCharacter(characterSelections.p2, access.ids, "mint"),
   };
-  const canControl = online
+  const worldMapVisible = introFinished && (online || Boolean(storyCharacters));
+
+  useEffect(() => {
+    if (!worldMapVisible) return;
+
+    const music = new Audio(worldMapMusic);
+    music.loop = true;
+    music.volume = 0.5;
+    let disposed = false;
+    const playMusic = () => {
+      music.play().then(() => {
+        if (disposed) {
+          music.pause();
+          return;
+        }
+        window.removeEventListener("pointerdown", playMusic);
+        window.removeEventListener("keydown", playMusic);
+      }).catch(() => {
+        // Retry on interaction if audible autoplay is blocked.
+      });
+    };
+    window.addEventListener("pointerdown", playMusic);
+    window.addEventListener("keydown", playMusic);
+    playMusic();
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("pointerdown", playMusic);
+      window.removeEventListener("keydown", playMusic);
+      music.pause();
+      music.removeAttribute("src");
+      music.load();
+    };
+  }, [worldMapVisible]);
+
+  const canControl = introFinished && (online
     ? Boolean(userId) && match?.host_id === userId
-    : Boolean(storyCharacters);
+    : Boolean(storyCharacters));
   const activeRegion = REGIONS.find((region) => region.id === selected);
   useEffect(() => {
     if (!online || !userId) return;
@@ -165,14 +261,7 @@ export default function WorldMap({ online = false }) {
   }, [canControl, selected, changeRegion]);
 
   useEffect(() => {
-    if (!online) {
-      const data = JSON.parse(
-        sessionStorage.getItem(`kitchen-story:${mode}`) ||
-          '{"total":0,"completed":[]}',
-      );
-      setTotal(data.total || 0);
-      return;
-    }
+    if (!online) return;
     let alive = true;
     supabase.auth.getUser().then(({ data }) => {
       if (alive) setUserId(data.user?.id);
@@ -183,7 +272,7 @@ export default function WorldMap({ online = false }) {
         if (!alive) return;
         const m = response.data;
         setMatch(m);
-        setTotal(m.story_total || 0);
+        setCreditBests(m.story_credits || {});
         if (m.status === "WAITING") {
           navigate(`/lobby/${roomCode}`, { replace: true });
           return;
@@ -203,7 +292,7 @@ export default function WorldMap({ online = false }) {
   }, [online, mode, roomCode, navigate]);
 
   async function selectMap(map) {
-    if (!canPlayStoryMap(map.id, total) || busy) return;
+    if (!canPlayStoryMap(map.id, total, creditBests) || busy) return;
     if (!online) {
       navigate(
         mode === "coop-local"
@@ -275,10 +364,21 @@ export default function WorldMap({ online = false }) {
       </div>
     );
   }
+  if (!introFinished) {
+    return (
+      <WorldMapIntro
+        src={worldMapCloudVideo}
+        onFinish={() => {
+          markWorldMapIntroSeen(introScope);
+          setIntroFinished(true);
+        }}
+      />
+    );
+  }
   return (
     <main className="wm-page">
       <header className="wm-header wm-header-compact">
-        <p className="wm-score">Score · {total}</p>
+        <p className="wm-score">Credits: {total} / {CREDIT_TARGET} · Maps passed: {passedMaps.length} / 5</p>
         {!online && (
           <div
             className="story-character-lineup"
@@ -301,6 +401,8 @@ export default function WorldMap({ online = false }) {
           {error}
         </p>
       )}
+      {graduated && (<section className="wm-graduation" role="status"><h2>Graduated!</h2><p>120 credits · All 5 maps passed</p><p>Campaign complete. Congratulations, Chef!</p></section>)}
+      <details className="wm-credit-rules"><summary>Credit rules</summary><p>Graduate with 120 credits and pass all 5 maps.</p><p>Pass: 18 credits. Best result per map: up to 30.</p><p>Hamburger +5 / expired −3; Pizza +6 / expired −4; Salad +3 / expired −2.</p><p>+1 bonus when served with at least half the order time remaining.</p><p>Retakes only add the improvement over your previous best.</p></details>
       <div className="wm-map">
         <svg
           viewBox="0 0 1672 941"
@@ -309,7 +411,7 @@ export default function WorldMap({ online = false }) {
         >
           <image href={worldMapImage} width="1672" height="941" />
           {REGIONS.map((region) => {
-            const unlocked = canPlayStoryMap(region.id, total);
+            const unlocked = canPlayStoryMap(region.id, total, creditBests);
             return (
               <g key={region.id}>
                 <polygon
@@ -345,18 +447,19 @@ export default function WorldMap({ online = false }) {
           <>
             <div>
               <h2>{activeRegion.name}</h2>
+              <p>Best: {creditBests[activeRegion.id] || 0} / 30 credits · {passedMaps.includes(activeRegion.id) ? "Passed" : "Pass: 18 credits"}</p>
               <p>
-                {canPlayStoryMap(activeRegion.id, total)
+                {canPlayStoryMap(activeRegion.id, total, creditBests)
                   ? "Unlocked"
                   : STORY_MAPS.find((map) => map.id === activeRegion.id)
                         ?.available
-                    ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} points`
+                    ? `Locked · Requires ${STORY_MAPS.find((map) => map.id === activeRegion.id).unlockScore} credits and all previous maps passed`
                     : "Locked"}
               </p>
             </div>
             {canControl && (
               <button
-                disabled={busy || !canPlayStoryMap(activeRegion.id, total)}
+                disabled={busy || !canPlayStoryMap(activeRegion.id, total, creditBests)}
                 onClick={() => selectMap(activeRegion)}
               >
                 Play
