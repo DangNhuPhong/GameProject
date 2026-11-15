@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { STORY_MAPS, canPlayStoryMap, summarizeCredits, CREDIT_TARGET } from "../game/storyConfig";
 import { getMatch } from "../services/api";
@@ -69,33 +69,13 @@ export default function WorldMap({ online = false }) {
 }
 
 function WorldMapIntro({ src, onFinish }) {
-    const videoRef = useRef(null);
-
-    useEffect(() => {
-      const video = videoRef.current;
-      const playWithSound = () => {
-        video.muted = false;
-        video.volume = 1;
-        // Retry on user interaction if the browser blocks audible autoplay.
-        video.play().catch(() => {});
-      };
-      playWithSound();
-      window.addEventListener("pointerdown", playWithSound);
-      window.addEventListener("keydown", playWithSound);
-      return () => {
-        window.removeEventListener("pointerdown", playWithSound);
-        window.removeEventListener("keydown", playWithSound);
-      };
-    }, []);
-
     return (
       <main className="wm-intro" aria-label="World map intro">
         <video
-          ref={videoRef}
           className="wm-intro-video"
           src={src}
           autoPlay
-          muted={false}
+          muted
           playsInline
           controls={false}
           disablePictureInPicture
