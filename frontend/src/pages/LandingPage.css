@@ -122,6 +122,7 @@
   top: 20px;
   right: 20px;
   z-index: 10;
+  max-width: calc(100% - 40px);
 }
 
 .lp-menu-trigger {
@@ -276,8 +277,11 @@
     gap: 6px;
     top: 12px;
     right: 12px;
+    max-width: calc(100% - 24px);
+    gap: 6px;
   }
   .lp-shop-trigger { padding: 0 12px; height: 46px; font-size: 13px; }
+  .lp-menu-trigger { min-width: 0; }
   .lp-menu-trigger {
     min-width: 46px;
     height: 46px;
