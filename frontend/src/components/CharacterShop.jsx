@@ -3,6 +3,7 @@ import { CHARACTERS } from "../game/characters";
 import { buyCharacter, getShop } from "../services/shopApi";
 import "./CharacterShop.css";
 import CoinTopUp from "./CoinTopUp";
+import CustomCharacterCreator from './CustomCharacterCreator';
 
 const formatCoins = (value) => Number(value).toLocaleString("en-US");
 
@@ -86,6 +87,9 @@ export default function CharacterShop({ user, onClose, onBalanceChange }) {
         </section>
         {topupOpen && <CoinTopUp userId={user.id} busy={!!buying || toppingUp} onBusyChange={setToppingUp}
           onComplete={(data) => { setShop(data); balanceCallback.current(data.coins); }} />}
+        <CustomCharacterCreator key={user.id}
+          onBalanceChange={coins=>{setShop(current=>current?{...current,coins}:current);balanceCallback.current(coins);}}
+          onComplete={()=>setReload(value=>value+1)}/>
         <div className="shop-filters" role="group" aria-label="Filter characters">
           {[["all", "All characters"], ["owned", "Owned"], ["unowned", "Not owned"]].map(([id, label]) => (
             <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>

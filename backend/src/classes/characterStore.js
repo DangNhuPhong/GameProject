@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isCustomCharacter } from '../services/customCharacterIds.js';
 
 export const CHARACTER_IDS = Object.freeze(["pepper", "mint", "sage", "phong", "faker", "ronaldo", "trump", "kha-banh"]);
-export const normalizeCharacter = (id) => CHARACTER_IDS.includes(id) ? id : "pepper";
+export const normalizeCharacter = (id) => CHARACTER_IDS.includes(id) || isCustomCharacter(id) ? id : "pepper";
 
 // Separate from rounds so returning to the lobby and reconnecting keep the choice.
 export function createCharacterStore(filename) {
@@ -12,7 +13,7 @@ export function createCharacterStore(filename) {
   return {
     get(matchId, userId) { return normalizeCharacter(choices[matchId]?.[userId]); },
     set(matchId, userId, characterId) {
-      if (!CHARACTER_IDS.includes(characterId)) throw new Error("Invalid character");
+      if (!CHARACTER_IDS.includes(characterId) && !isCustomCharacter(characterId)) throw new Error("Invalid character");
       const next = { ...choices, [matchId]: { ...choices[matchId], [userId]: characterId } };
       fs.mkdirSync(path.dirname(filename), { recursive: true });
       fs.writeFileSync(`${filename}.tmp`, JSON.stringify(next));

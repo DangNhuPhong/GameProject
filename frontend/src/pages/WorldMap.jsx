@@ -1,18 +1,19 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { STORY_MAPS, canPlayStoryMap, summarizeCredits, CREDIT_TARGET } from "../game/storyConfig";
+import { readStoryProgress } from "../game/storyProgress";
 import { getMatch } from "../services/api";
 import { startStoryRound, returnRoomToLobby } from "../services/storyApi";
 import worldMapImage from "../assets/world-map-clean.png";
 import worldMapCloudVideo from "../assets/world-map-cloud-reveal.mp4";
 import worldMapMusic from "../assets/audio/3-the-throne-room.mp3";
-import { markWorldMapIntroSeen } from "../game/worldMapIntro";
+import { markWorldMapIntroSeen, hasSeenWorldMapIntro } from "../game/worldMapIntro";
 import { socket } from "../services/socket";
 import "./WorldMap.css";
 import { supabase } from "../lib/supabase";
 import CharacterPicker from "../components/CharacterPicker";
 import useOwnedCharacters from "../hooks/useOwnedCharacters";
-import { allowedCharacter, isLineupOwned } from "../game/characterAccess";
+import { allowedCharacter, resolveStoryLineup } from "../game/characterAccess";
 import {
   readCharacter,
   readStoryCharacters,
@@ -65,37 +66,17 @@ const REGIONS = [
 
 export default function WorldMap({ online = false }) {
   const location = useLocation();
-  return <WorldMapContent key={location.key} online={online} />;
+  return <WorldMapContent key={location.key} online={online} replayIntro={Boolean(location.state?.replayCloudIntro)} />;
 }
 
 function WorldMapIntro({ src, onFinish }) {
-    const videoRef = useRef(null);
-
-    useEffect(() => {
-      const video = videoRef.current;
-      const playWithSound = () => {
-        video.muted = false;
-        video.volume = 1;
-        // Retry on user interaction if the browser blocks audible autoplay.
-        video.play().catch(() => {});
-      };
-      playWithSound();
-      window.addEventListener("pointerdown", playWithSound);
-      window.addEventListener("keydown", playWithSound);
-      return () => {
-        window.removeEventListener("pointerdown", playWithSound);
-        window.removeEventListener("keydown", playWithSound);
-      };
-    }, []);
-
     return (
       <main className="wm-intro" aria-label="World map intro">
         <video
-          ref={videoRef}
           className="wm-intro-video"
           src={src}
           autoPlay
-          muted={false}
+          muted
           playsInline
           controls={false}
           disablePictureInPicture
@@ -103,26 +84,18 @@ function WorldMapIntro({ src, onFinish }) {
           onEnded={onFinish}
           onError={onFinish}
         />
-        <button
-          className="wm-intro-skip"
-          onClick={onFinish}
-        >
-          Bỏ qua
-        </button>
       </main>
     );
 }
 
-function WorldMapContent({ online }) {
+function WorldMapContent({ online, replayIntro = false }) {
   const { mode, roomCode } = useParams();
   const introScope = online ? `online:${roomCode}` : `offline:${mode}`;
   const navigate = useNavigate();
-  const [introFinished, setIntroFinished] = useState(false);
+  const [introFinished, setIntroFinished] = useState(()=>!replayIntro && hasSeenWorldMapIntro(introScope));
   const [creditBests, setCreditBests] = useState(() => {
     if (online) return {};
-    try {
-      return JSON.parse(sessionStorage.getItem(`kitchen-story:${mode}`) || "{}").creditBests || {};
-    } catch { return {}; }
+    return readStoryProgress(mode).creditBests;
   });
   const { total, passedMaps, graduated } = summarizeCredits(creditBests);
   const [match, setMatch] = useState(null);
@@ -139,7 +112,8 @@ function WorldMapContent({ online }) {
     p1: readCharacter("p1"),
     p2: readCharacter("p2"),
   }));
-  const storyCharacters = !access.loading && isLineupOwned(storedCharacters, access.ids, mode) ? storedCharacters : null;
+  const lineup=resolveStoryLineup(storedCharacters,access,mode);
+  const storyCharacters = lineup.characters;
   const permittedSelections = {
     p1: allowedCharacter(characterSelections.p1, access.ids),
     p2: allowedCharacter(characterSelections.p2, access.ids, "mint"),
@@ -179,9 +153,9 @@ function WorldMapContent({ online }) {
     };
   }, [worldMapVisible]);
 
-  const canControl = introFinished && (online
+  const canControl = Boolean(introFinished && (online
     ? Boolean(userId) && match?.host_id === userId
-    : Boolean(storyCharacters));
+    : lineup.verified));
   const activeRegion = REGIONS.find((region) => region.id === selected);
   useEffect(() => {
     if (!online || !userId) return;
@@ -292,7 +266,7 @@ function WorldMapContent({ online }) {
   }, [online, mode, roomCode, navigate]);
 
   async function selectMap(map) {
-    if (!canPlayStoryMap(map.id, total, creditBests) || busy) return;
+    if (!canControl || !canPlayStoryMap(map.id, total, creditBests) || busy) return;
     if (!online) {
       navigate(
         mode === "coop-local"
@@ -313,7 +287,7 @@ function WorldMapContent({ online }) {
       setBusy(false);
     }
   }
-  if (!online && !storyCharacters) {
+  if (!online && lineup.needsSelection) {
     return (
       <div className="character-offline">
         <div className="character-offline-panel">
@@ -379,7 +353,7 @@ function WorldMapContent({ online }) {
     <main className="wm-page">
       <header className="wm-header wm-header-compact">
         <p className="wm-score">Credits: {total} / {CREDIT_TARGET} · Maps passed: {passedMaps.length} / 5</p>
-        {!online && (
+        {!online && lineup.verified && (
           <div
             className="story-character-lineup"
             aria-label="Nhân vật trong story"
@@ -393,7 +367,7 @@ function WorldMapContent({ online }) {
           </div>
         )}
         <p>
-          {canControl ? "W A S D · Select region" : "W A S D · Host selects"}
+          {canControl ? "W A S D - Select region" : online ? "W A S D - Host selects" : "Restoring your saved chef..."}
         </p>
       </header>
       {error && (
@@ -401,6 +375,10 @@ function WorldMapContent({ online }) {
           {error}
         </p>
       )}
+      {!online && lineup.error && <div role="alert" className="wm-error">
+        Could not verify your saved chef. Your selection and progress are kept.
+        <button type="button" onClick={access.retry}>Retry</button>
+      </div>}
       {graduated && (<section className="wm-graduation" role="status"><h2>Graduated!</h2><p>120 credits · All 5 maps passed</p><p>Campaign complete. Congratulations, Chef!</p></section>)}
       <details className="wm-credit-rules"><summary>Credit rules</summary><p>Graduate with 120 credits and pass all 5 maps.</p><p>Pass: 18 credits. Best result per map: up to 30.</p><p>Hamburger +5 / expired −3; Pizza +6 / expired −4; Salad +3 / expired −2.</p><p>+1 bonus when served with at least half the order time remaining.</p><p>Retakes only add the improvement over your previous best.</p></details>
       <div className="wm-map">
@@ -459,7 +437,7 @@ function WorldMapContent({ online }) {
             </div>
             {canControl && (
               <button
-                disabled={busy || !canPlayStoryMap(activeRegion.id, total, creditBests)}
+                disabled={!canControl || busy || !canPlayStoryMap(activeRegion.id, total, creditBests)}
                 onClick={() => selectMap(activeRegion)}
               >
                 Play

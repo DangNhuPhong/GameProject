@@ -6,7 +6,7 @@ import { getMatch, setReady, startMatch } from "../services/api";
 import { updateRoomMode, selectCharacter } from "../services/storyApi";
 import CharacterPicker from "../components/CharacterPicker";
 import useOwnedCharacters from "../hooks/useOwnedCharacters";
-import { getCharacter, saveCharacter } from "../game/characters";
+import { getCharacter, saveCharacter, registerCustomCharacter } from "../game/characters";
 
 import { socket } from "../services/socket";
 import "./Play.css";
@@ -29,7 +29,8 @@ function Lobby() {
   const [characterPickerOpen, setCharacterPickerOpen] = useState(false);
 
   useEffect(() => {
-    const onSelected = ({ userId, characterId }) =>
+    const onSelected = ({ userId, characterId, customCharacter }) => {
+      registerCustomCharacter(customCharacter);
       setMatch((current) =>
         current
           ? {
@@ -42,6 +43,7 @@ function Lobby() {
             }
           : current,
       );
+    };
     socket.on("character-selected", onSelected);
     return () => socket.off("character-selected", onSelected);
   }, []);

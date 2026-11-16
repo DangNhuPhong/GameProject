@@ -1,5 +1,9 @@
 // Only each map's best finished round contributes to graduation.
 export const CREDIT_TARGET = 120;
+// Temporary starting progress for testing the graduation ending.
+export const DEFAULT_STORY_CREDITS = Object.freeze({
+  classroom: 30, farm: 30, sports: 30, "computer-room": 25, library: 0,
+});
 export const MAP_CREDIT_CAP = 30;
 export const MAP_PASS_CREDITS = 18;
 export const CREDIT_RULES = {

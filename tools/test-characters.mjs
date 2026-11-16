@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isCustomCharacter } from '../backend/src/services/customCharacterIds.js';
 import { createCharacterStore, CHARACTER_IDS } from "../backend/src/classes/characterStore.js";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kitchen-characters-"));
@@ -31,7 +32,7 @@ try {
       return query;
     },
   };
-  const handler = new Function("supabase", "characterStore", "CHARACTER_IDS", "ownsCharacter", `${handlerSource.replace("export ", "")}\nreturn selectCharacter;`)(supabase, store, CHARACTER_IDS, async () => {
+  const handler = new Function("supabase", "characterStore", "CHARACTER_IDS", "isCustomCharacter", "customCharacter", "ownsCharacter", `${handlerSource.replace("export ", "")}\nreturn selectCharacter;`)(supabase, store, CHARACTER_IDS, isCustomCharacter, async()=>null, async () => {
     if (ownershipError) throw new Error("Database unavailable");
     return owned;
   });
@@ -64,6 +65,8 @@ try {
   const getCharacter = (id) => ({ spriteKey: `chef-${CHARACTER_IDS.includes(id) ? id : "pepper"}` });
   const Methods = new Function("getCharacter", `const CHEF_FOOT_OFFSET=9,CHEF_SCALE=.1875;const chefFacing=()=>"side";return class {${scene.slice(start, end)}}`)(getCharacter);
   const remote = new Methods();
+  remote.ensureChefTexture=()=>{};
+  remote.textures={exists:()=>true};
   remote.otherPlayers = {};
   const visual = () => ({ setTint() { return this; }, setAlpha() { return this; }, setDepth() { return this; }, setOrigin() { return this; }, setScale() { return this; }, setFlipX() {} });
   remote.add = { image: visual, sprite: (x, y, key) => ({ ...visual(), key }) };

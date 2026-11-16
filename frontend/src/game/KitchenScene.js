@@ -11,7 +11,7 @@ import itemsUrl from "../assets/items-pixel-v2.png";
 import dishesUrl from "../assets/dishes-pixel.png";
 import cookedPizzaUrl from "../assets/pizza-cooked-pixel.png";
 
-import { CHARACTERS, getCharacter } from "./characters";
+import { CHARACTERS, getCharacter, registerCustomCharacter } from "./characters";
 import { createGameControls } from "./gameControls";
 
 // =====================================
@@ -473,7 +473,9 @@ export function createKitchenScene({
       // NHÂN VẬT CỦA NGƯỜI CHƠI TRÊN MÁY NÀY
       // =================================
 
-      CHARACTERS.forEach((character) => createChefAnims(this, character.spriteKey));
+      CHARACTERS.forEach((character) => {
+        if(this.textures.exists(character.spriteKey))createChefAnims(this, character.spriteKey);
+      });
 
       this.players = modeCfg.locals.map((slot, index) =>
         this.createLocalPlayer(slot, index, spawn),
@@ -706,10 +708,14 @@ export function createKitchenScene({
       });
 
       on("character-roster", ({ players = [] }) => {
-        players.forEach(({ userId, characterId, x, y }) => {
+        players.forEach(({ userId, characterId, customCharacter, x, y }) => {
+          registerCustomCharacter(customCharacter);
+          this.ensureChefTexture(characterId);
           const local = this.playerByUserId(userId);
           if (local) {
-            local.spriteKey = getCharacter(characterId).spriteKey;
+            const key=getCharacter(characterId).spriteKey;
+            if(!this.textures.exists(key))return;
+            local.spriteKey = key;
             local.sprite.play(`${local.spriteKey}-idle-${local.facing}`, true);
           } else if (Number.isFinite(x) && Number.isFinite(y)) {
             this.updateOtherPlayer(userId, x, y, Date.now(), characterId);
@@ -766,6 +772,7 @@ export function createKitchenScene({
 
     createLocalPlayer(slot, index, spawn) {
       const style = { ...PLAYER_STYLE[slot], ...getCharacter(characterSelections[slot]) };
+      if(!this.textures.exists(style.spriteKey))style.spriteKey='chef-pepper';
       const pos = this.findSpawnFor(index, spawn);
 
       const shadow = this.add
@@ -1272,8 +1279,27 @@ export function createKitchenScene({
     // OTHER PLAYERS (chỉ coop-online)
     // =====================================
 
+    ensureChefTexture(characterId) {
+      const character=getCharacter(characterId),key=character.spriteKey;
+      if(this.textures.exists(key))return;
+      this.pendingChefTextures ||= new Set();
+      if(this.pendingChefTextures.has(key))return;
+      this.pendingChefTextures.add(key);
+      const complete=(loadedKey)=>{
+        if(loadedKey!==key)return;
+        cleanup();createChefAnims(this,key);
+      };
+      const failed=file=>{if(file.key===key)cleanup();};
+      const cleanup=()=>{this.load.off('filecomplete',complete);this.load.off('loaderror',failed);this.pendingChefTextures.delete(key);};
+      this.load.on('filecomplete',complete);this.load.on('loaderror',failed);
+      this.load.spritesheet(key,character.sheet,{frameWidth:CHEF_FRAME_W,frameHeight:CHEF_FRAME_H});
+      if(!this.load.isLoading())this.load.start();
+    }
+
     updateOtherPlayer(userId, x, y, t, characterId) {
-      const spriteKey = getCharacter(characterId).spriteKey;
+      this.ensureChefTexture(characterId);
+      const desiredKey=getCharacter(characterId).spriteKey;
+      const spriteKey = this.textures.exists(desiredKey)?desiredKey:'chef-pepper';
       if (!this.otherPlayers[userId]) {
         const shadow = this.add
           .image(x, y + 8, "px-shadow")

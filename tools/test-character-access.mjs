@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isCustomCharacter } from '../backend/src/services/customCharacterIds.js';
 import { FREE_CHARACTER_IDS, isLineupOwned, allowedCharacter } from "../frontend/src/game/characterAccess.js";
 
 assert.equal(isLineupOwned({ p1: "faker" }, FREE_CHARACTER_IDS, "single"), false);
@@ -20,7 +21,13 @@ const database = { from(table) {
 } };
 const source = fs.readFileSync(new URL("../backend/src/services/characterAccess.js", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace(/export /g, "");
-const { ownsCharacter, permittedCharacter } = new Function("supabase", `${source}; return { ownsCharacter, permittedCharacter };`)(database);
+const customOwner='4a8612fe-b48f-4151-b345-caa4a13a5a81';
+let customExists=true;
+const { ownsCharacter, permittedCharacter } = new Function("supabase", "isCustomCharacter", "customCharacter", `${source}; return { ownsCharacter, permittedCharacter };`)(database, isCustomCharacter, async id=>id===customOwner&&customExists?{id:`custom:${id}`}:null);
+assert.equal(await ownsCharacter(customOwner,`custom:${customOwner}`),true);
+assert.equal(await ownsCharacter('other-user',`custom:${customOwner}`),false,'Custom chefs cannot be equipped by another account');
+customExists=false;
+assert.equal(await ownsCharacter(customOwner,`custom:${customOwner}`),false,'Missing custom assets never grant ownership');
 assert.equal(await ownsCharacter("alice", "pepper"), true);
 assert.equal(queries, 0, "Free chefs work even without shop setup");
 assert.equal(await ownsCharacter("alice", "faker"), false);

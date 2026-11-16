@@ -1,0 +1,37 @@
+.graduation-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  background: #000;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.graduation-screen-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 2s ease-in-out;
+  user-select: none;
+}
+
+.graduation-screen-image-loaded {
+  animation: graduation-reveal 2s ease-in-out both;
+}
+
+.graduation-screen-image-loaded.graduation-screen-image-fading {
+  animation: graduation-hide 2s ease-in-out both;
+}
+
+@keyframes graduation-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes graduation-hide {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

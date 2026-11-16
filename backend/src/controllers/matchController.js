@@ -1,8 +1,9 @@
 import { controller } from "../classes/gameRuntime.js";
 import { characterStore, CHARACTER_IDS } from "../classes/characterStore.js";
-import { canPlayStoryMap, getStoryMap, summarizeCredits } from "../classes/storyConfig.js";
+import { canPlayStoryMap, getStoryMap, summarizeCredits, DEFAULT_STORY_CREDITS } from "../classes/storyConfig.js";
 import { supabase } from "../config/supabase.js";
 import { ownsCharacter, permittedCharacter } from "../services/characterAccess.js";
+import { isCustomCharacter, customCharacter } from '../services/customCharacters.js';
 
 const generateRoomCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -22,7 +23,7 @@ export async function selectCharacter(req, res) {
     const { data: { user }, error } = await supabase.auth.getUser(token || "");
     if (error || !user) return res.status(401).json({ message: "Please sign in" });
     const characterId = req.body.characterId;
-    if (!CHARACTER_IDS.includes(characterId)) return res.status(400).json({ message: "Invalid character" });
+    if (!CHARACTER_IDS.includes(characterId) && !isCustomCharacter(characterId)) return res.status(400).json({ message: "Invalid character" });
     const { data: match } = await supabase.from("matches").select("id, status, room_code")
       .eq("room_code", req.params.roomCode.trim().toUpperCase()).maybeSingle();
     if (!match) return res.status(404).json({ message: "Room not found" });
@@ -38,7 +39,8 @@ export async function selectCharacter(req, res) {
       return res.status(503).json({ message: "Could not verify character ownership. Please try again." });
     }
     characterStore.set(match.id, user.id, characterId);
-    req.app.get("io")?.to(match.room_code).emit("character-selected", { userId: user.id, characterId });
+    req.app.get("io")?.to(match.room_code).emit("character-selected", { userId: user.id, characterId,
+      ...(isCustomCharacter(characterId) ? { customCharacter: await customCharacter(user.id) } : {}) });
     res.json({ data: { characterId } });
   } catch (error) {
     console.error(error);
@@ -113,7 +115,8 @@ export const createMatch = async (req, res) => {
         max_players,
         game_mode: "STORY",
         current_map: "classroom",
-        story_total: 0,
+        story_total: summarizeCredits(DEFAULT_STORY_CREDITS).total,
+        story_credits: { ...DEFAULT_STORY_CREDITS },
         round_status: "IDLE",
       })
       .select()
@@ -208,6 +211,7 @@ export const getMatchByRoomCode = async (req, res) => {
       success: true,
       data: { ...match, players: await Promise.all((match.players || []).map(async (player) => ({
         ...player, character_id: await permittedCharacter(player.user_id, characterStore.get(match.id, player.user_id)),
+        custom_character: isCustomCharacter(characterStore.get(match.id, player.user_id)) ? await customCharacter(player.user_id) : null,
       }))) },
     });
   } catch (error) {

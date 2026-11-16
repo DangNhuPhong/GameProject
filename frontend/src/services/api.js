@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { registerCustomCharacter } from '../game/characters';
 
 const BASE_URL = `${API_URL}/api`;
 
@@ -75,6 +76,8 @@ export const getMatch = async (roomCode) => {
   if (!response.ok) {
     throw new Error(result.message || "Failed to load room");
   }
+
+  result.data?.players?.forEach(player=>registerCustomCharacter(player.custom_character));
 
   return result;
 };

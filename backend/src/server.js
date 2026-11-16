@@ -1,4 +1,4 @@
-import "dotenv/config";
+import './config/env.js';
 import http from "http";
 import { Server } from "socket.io";
 import app from "./app.js";
@@ -6,8 +6,13 @@ import { controller } from "./classes/gameRuntime.js";
 import { supabase } from "./config/supabase.js";
 import { characterStore } from "./classes/characterStore.js";
 import { permittedCharacter } from "./services/characterAccess.js";
+import { customCharacter, isCustomCharacter, recoverExpiredJobs, cleanupCharacterFiles } from './services/customCharacters.js';
 
 const PORT = process.env.PORT || 5000;
+// Durable reservations are refunded after a crash; leftover old images are retried.
+const maintainCharacters=async()=>{await recoverExpiredJobs();await cleanupCharacterFiles();};
+void maintainCharacters().catch(error=>console.error('AI character maintenance:',error.message));
+setInterval(()=>{void maintainCharacters().catch(error=>console.error('AI character maintenance:',error.message));},60000).unref();
 
 // ==========================================
 // KHÔNG ĐỂ LỖI BẤT NGỜ LÀM SẬP SERVER
@@ -166,10 +171,11 @@ io.on("connection", (socket) => {
       return {
       userId: member.user_id,
       characterId,
+      customCharacter: isCustomCharacter(characterId) ? await customCharacter(member.user_id) : null,
       ...controller.positions.get(controller.positionKey(normalizedRoomCode, member.user_id)),
       };
     }));
-    socket.emit("character-roster", { players: roster });
+    io.to(normalizedRoomCode).emit("character-roster", { players: roster });
   });
 
   // ==========================================

@@ -1,8 +1,10 @@
 import { supabase } from "../config/supabase.js";
+import { isCustomCharacter, customCharacter } from './customCharacters.js';
 
 export const FREE_CHARACTER_IDS = Object.freeze(["pepper", "mint", "sage"]);
 
 export async function ownsCharacter(userId, characterId) {
+  if(isCustomCharacter(characterId))return characterId===`custom:${userId}` && !!await customCharacter(userId);
   if (FREE_CHARACTER_IDS.includes(characterId)) return true;
   const { data: character, error: catalogError } = await supabase.from("shop_characters")
     .select("price").eq("id", characterId).maybeSingle();
