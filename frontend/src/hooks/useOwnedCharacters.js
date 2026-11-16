@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { getShop } from "../services/shopApi";
 import { FREE_CHARACTER_IDS } from "../game/characterAccess";
+import { getCustomCharacter } from '../services/customCharacterApi';
+import { clearCustomCharacters } from '../game/characters';
 
 // No cached paid access: account changes and network errors always fall back to free chefs.
 export default function useOwnedCharacters(enabled = true) {
+  const [revision,setRevision]=useState(0);
   const [access, setAccess] = useState({ ids: FREE_CHARACTER_IDS, loading: enabled, error: "" });
   useEffect(() => {
     if (!enabled) return;
@@ -18,10 +21,13 @@ export default function useOwnedCharacters(enabled = true) {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         accountId = data.session?.user.id ?? null;
+        clearCustomCharacters();
         const shop = data.session ? await getShop() : null;
+        let customError='';
+        const custom = data.session ? await getCustomCharacter().catch(error=>{customError=error.message;return null;}) : null;
         if (active && current === generation) setAccess({
-          ids: [...new Set([...FREE_CHARACTER_IDS, ...(shop?.characters || []).filter((c) => c.owned).map((c) => c.id)])],
-          loading: false, error: "",
+          ids: [...new Set([...FREE_CHARACTER_IDS, ...(shop?.characters || []).filter((c) => c.owned).map((c) => c.id), ...(custom?.character?[custom.character.id]:[])])],
+          loading: false, error: "", customError,
         });
       } catch {
         if (active && current === generation) setAccess({ ids: FREE_CHARACTER_IDS, loading: false,
@@ -35,6 +41,6 @@ export default function useOwnedCharacters(enabled = true) {
       setTimeout(() => { if (active) void refresh(); }, 0);
     });
     return () => { active = false; generation++; subscription.unsubscribe(); };
-  }, [enabled]);
-  return access;
+  }, [enabled,revision]);
+  return {...access,retry:()=>setRevision(value=>value+1)};
 }

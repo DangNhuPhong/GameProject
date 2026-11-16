@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { resetWorldMapIntros } from "../game/worldMapIntro";
 import "./Play.css";
+import GameNavigation from "../components/GameNavigation";
 
 function Play() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
 
   // "modes": chọn chế độ chơi | "online": tạo / vào phòng
@@ -31,26 +31,17 @@ function Play() {
 
       if (active) setLoggedIn(true);
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, level, coins, avatar")
-        .eq("id", user.id)
-        .single();
 
-      if (!active) return;
-
-      if (error) {
-        console.error("Profile error:", error);
-        return;
-      }
-
-      setProfile(data);
     };
 
     loadProfile();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setLoggedIn(Boolean(session?.user));
+    });
 
     return () => {
       active = false;
+      authListener.subscription.unsubscribe();
     };
   }, [navigate]);
 
@@ -60,11 +51,7 @@ function Play() {
       <h1 className="pl-sr-only">OverNấuĂn</h1>
 
       {/* Tên người chơi ở góc trên phải */}
-      {profile && (
-        <div className="pl-glass pl-profile">
-          <span className="pl-profile-name">{profile.username}</span>
-        </div>
-      )}
+      <GameNavigation expanded />
 
       {/* Thẻ ở giữa */}
       {view === "modes" ? (

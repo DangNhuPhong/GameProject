@@ -114,6 +114,7 @@
 
 /* ===== Menu góc trên phải ===== */
 .lp-menu-wrap {
+  max-width: calc(100% - 40px);
   position: absolute;
   display: flex;
   align-items: center;
@@ -272,6 +273,8 @@
     padding: 18px 56px;
   }
   .lp-menu-wrap {
+    max-width: calc(100% - 24px);
+    gap: 6px;
     top: 12px;
     right: 12px;
     max-width: calc(100% - 24px);

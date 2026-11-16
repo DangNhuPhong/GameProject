@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import GameNavigation from "../components/GameNavigation";
 import { supabase } from "../lib/supabase";
 import CharacterShop from "../components/CharacterShop";
 import PlayHistory from "../components/PlayHistory";
 import "./LandingPage.css";
 
-function LandingPage() {
+export default function LandingPage() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -103,9 +103,11 @@ function LandingPage() {
     (profile?.id === userId ? profile?.username : null) || user?.email?.split("@")[0] || "Player";
 
   return (
-    <div className="lp-root">
-      {/* Tên game đã có trong ảnh nền nên ẩn h1 (vẫn giữ cho SEO/screen reader) */}
+    <main className="lp-root">
       <h1 className="lp-sr-only">OverNấuĂn</h1>
+      <GameNavigation />
+      <button className="lp-glass lp-play" onClick={() => navigate("/play")}>Play</button>
+    </main>
 
       {/* ===== Menu góc trên phải ===== */}
       <div className="lp-menu-wrap" ref={menuRef}>
@@ -229,5 +231,3 @@ function LandingPage() {
     </div>
   );
 }
-
-export default LandingPage;

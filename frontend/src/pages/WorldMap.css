@@ -59,19 +59,6 @@
   height:100%;
   object-fit:contain;
 }
-.wm-intro-skip {
-  position:absolute;
-  top:max(20px,env(safe-area-inset-top));
-  right:max(20px,env(safe-area-inset-right));
-  padding:10px 22px;
-  border:1px solid #ffffff80;
-  border-radius:999px;
-  background:#142b27d9;
-  color:#fff;
-  font:600 16px "Segoe UI",sans-serif;
-  cursor:pointer;
-}
-.wm-intro-skip:hover { background:#254c43; }
 .wm-credit-rules { position:absolute; z-index:3; top:14px; right:14px; max-width:min(340px,80vw); padding:12px 16px; border-radius:12px; background:#142b27ed; color:#fff; font-size:13px; border:1px solid #ffffff60; }
 .wm-credit-rules summary { cursor:pointer; font-weight:bold; }
 .wm-credit-rules p { line-height:1.5; }
@@ -79,4 +66,3 @@
 .wm-graduation h2 { color:#ffdf73; margin:0 0 10px; font-size:32px; }
 .wm-header-compact { max-width:calc(100vw - 160px); }
 @media(max-width:600px) { .wm-credit-rules { top:100px; } .wm-info { width:calc(100% - 120px); } }
-.wm-intro-skip:focus-visible { outline:3px solid #ffe16c; outline-offset:4px; }

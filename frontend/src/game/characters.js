@@ -75,12 +75,21 @@ export const CHARACTERS = [
 ];
 export const getCharacter = (id) =>
   CHARACTERS.find((character) => character.id === id) || CHARACTERS[0];
+export const isCustomCharacterId = id => /^custom:[0-9a-f-]{36}$/i.test(id || '');
+export function registerCustomCharacter(character) {
+  if(!character || !isCustomCharacterId(character.id) || !character.version) return;
+  if(![character.sheet,character.portrait].every(url=>typeof url==='string' && /^https?:\/\//.test(url)))return;
+  const index=CHARACTERS.findIndex(c=>c.id===character.id);
+  if(index<0)CHARACTERS.push(character);else CHARACTERS[index]=character;
+}
+export function clearCustomCharacters(){
+  for(let i=CHARACTERS.length-1;i>=0;i--)if(isCustomCharacterId(CHARACTERS[i].id))CHARACTERS.splice(i,1);
+}
+const validSelection = id => isCustomCharacterId(id) || CHARACTERS.some(c=>c.id===id);
 export function readCharacter(slot = "p1") {
   try {
-    return getCharacter(
-      localStorage.getItem(`kitchen-character:${slot}`) ||
-        (slot === "p2" ? "mint" : "pepper"),
-    ).id;
+    const id=localStorage.getItem(`kitchen-character:${slot}`);
+    return validSelection(id) ? id : slot==='p2'?'mint':'pepper';
   } catch {
     return slot === "p2" ? "mint" : "pepper";
   }
@@ -104,7 +113,7 @@ export function readStoryCharacters(mode) {
       !characters ||
       slots.some(
         (slot) =>
-          !CHARACTERS.some((character) => character.id === characters[slot]),
+          !validSelection(characters[slot]),
       )
     )
       return null;

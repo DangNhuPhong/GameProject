@@ -21,7 +21,7 @@ export default function FullscreenButton() {
   return (
     <button
       type="button"
-      className="fs-btn"
+      className="fs-btn lp-glass"
       onClick={toggleFullscreen}
       aria-label={isFs ? "Exit fullscreen" : "Enter fullscreen"}
     >

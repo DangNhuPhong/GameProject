@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import Phaser from "phaser";
@@ -23,6 +23,8 @@ import useOwnedCharacters from "../hooks/useOwnedCharacters";
 import { allowedCharacter, isLineupOwned } from "../game/characterAccess";
 import { TUTORIAL_STEPS } from "../game/TutorialGuide";
 import TutorialCard, { Keycap, MovementKeys } from "../components/TutorialCard";
+import GraduationScreen from "../components/GraduationScreen";
+import { readStoryProgress } from "../game/storyProgress";
 import { applyCreditResult, getStoryMap, MAP_PASS_CREDITS, scoreContribution } from "../game/storyConfig";
 
 import {
@@ -74,6 +76,23 @@ function Game({ mode = "coop-online" }) {
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
+  const [initialProgress] = useState(() => {
+    if (!offline || tutorial) return {};
+    return readStoryProgress(mode);
+  });
+  const finishedProgress = useMemo(() => {
+    if (!result || tutorial || (!offline && match?.game_mode !== "STORY")) return null;
+    return applyCreditResult(offline ? initialProgress : { creditBests: match?.story_credits }, result);
+  }, [result, tutorial, offline, match, initialProgress]);
+  const [showGraduation, setShowGraduation] = useState(false);
+  useEffect(() => {
+    if (offline && finishedProgress) {
+      sessionStorage.setItem(`kitchen-story:${mode}`, JSON.stringify(finishedProgress));
+    }
+  }, [offline, mode, finishedProgress]);
+  const finishGraduation = useCallback(() => {
+    navigate(offline ? `/world/${mode}` : `/world-online/${roomCode}`, { replace: true });
+  }, [navigate, offline, mode, roomCode]);
   const [clock, setClock] = useState(null);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -124,6 +143,7 @@ function Game({ mode = "coop-online" }) {
         : match?.game_mode === "STORY"
           ? `/world-online/${roomCode}`
           : `/lobby/${roomCode}`,
+      { state: { replayCloudIntro: true } },
     );
   const handleQuit = async () => {
     if (quitting) return;
@@ -139,7 +159,7 @@ function Game({ mode = "coop-online" }) {
   };
 
   useEffect(() => {
-    if (offline || !match) return;
+    if (offline || !match || showGraduation) return;
     let active = true;
     const timer = setInterval(async () => {
       try {
@@ -152,7 +172,7 @@ function Game({ mode = "coop-online" }) {
             data.status !== "WAITING" && data.game_mode === "STORY"
               ? `/world-online/${roomCode}`
               : `/lobby/${roomCode}`,
-            { replace: true },
+            { replace: true, state: { replayCloudIntro: true } },
           );
         }
       } catch {
@@ -163,7 +183,7 @@ function Game({ mode = "coop-online" }) {
       active = false;
       clearInterval(timer);
     };
-  }, [offline, match, roomCode, navigate]);
+  }, [offline, match, roomCode, navigate, showGraduation]);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -578,7 +598,8 @@ function Game({ mode = "coop-online" }) {
         </div>
       )}
 
-      {result && (
+      {showGraduation && <GraduationScreen onFinish={finishGraduation} />}
+      {result && !showGraduation && (
         <div className="gm-overlay" style={{ zIndex: 9999 }}>
           <div className="gm-panel gm-glass">
             <h2>Map Finished</h2>
@@ -591,6 +612,11 @@ function Game({ mode = "coop-online" }) {
             <button
               className="gm-btn"
               onClick={() => {
+                if (finishedProgress?.graduated) {
+                  setMenuOpen(false);
+                  setShowGraduation(true);
+                  return;
+                }
                 if (offline) {
                   const key = `kitchen-story:${mode}`;
                   const progress = JSON.parse(

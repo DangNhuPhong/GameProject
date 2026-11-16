@@ -3,6 +3,7 @@ import cors from "cors";
 
 import recipeRoutes from "./routes/recipeRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
+import customCharacterRoutes from "./routes/customCharacterRoutes.js";
 import { getMapFilePath } from "./maps/index.js";
 
 const app = express();
@@ -14,6 +15,7 @@ app.use(
   }),
 );
 
+app.use('/api/custom-character', customCharacterRoutes);
 app.use(express.json());
 
 app.get("/", (req, res) => {
