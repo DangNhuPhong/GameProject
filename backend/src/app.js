@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import { openapiSpec } from "./config/openapi.js";
+import { swaggerPage } from "./config/swaggerPage.js";
 
 import recipeRoutes from "./routes/recipeRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
@@ -17,6 +19,13 @@ app.use(
 
 app.use('/api/custom-character', customCharacterRoutes);
 app.use(express.json());
+
+app.get("/api-docs.json", (req, res) => {
+  res.set("Cache-Control", "no-store").json(openapiSpec);
+});
+app.get(["/api-docs", "/api-docs/"], (req, res) => {
+  res.set("Cache-Control", "no-store").type("html").send(swaggerPage);
+});
 
 app.get("/", (req, res) => {
   res.json({
