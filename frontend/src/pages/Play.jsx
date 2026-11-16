@@ -35,9 +35,13 @@ function Play() {
     };
 
     loadProfile();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setLoggedIn(Boolean(session?.user));
+    });
 
     return () => {
       active = false;
+      authListener.subscription.unsubscribe();
     };
   }, [navigate]);
 
