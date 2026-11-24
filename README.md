@@ -138,6 +138,15 @@ npm run dev
 
 Open the URL printed by Vite, sign in, create a room and start the game. Open a second browser window (another account) to test multiplayer.
 
+### Google sign-in
+
+1. In the Supabase SQL Editor, run [`backend/sql/google_sign_in.sql`](backend/sql/google_sign_in.sql) so first-time Google users have a player profile.
+2. In the [Google Auth Platform console](https://console.cloud.google.com/auth/clients), create an OAuth client of type **Web application**. Add the frontend origins you use, such as `http://localhost:5173` and your Vercel origin, under **Authorized JavaScript origins**. Under **Authorized redirect URIs**, paste the callback URL shown in the Supabase Google provider settings.
+3. In Supabase **Authentication → Sign In / Providers → Google**, enable Google and enter the client ID and client secret from Google. Store the secret in these provider settings.
+4. In Supabase **Authentication → URL Configuration**, set **Site URL** to the deployed frontend origin and add the login URLs you use, such as `http://localhost:5173/login` and `https://<your-vercel-domain>/login`, to **Redirect URLs**. Use the actual Vite port if it differs. If the Google OAuth app uses an external audience in Testing, add the Google accounts that will test sign-in under **Audience**.
+
+Open **Menu → Login → Continue with Google**. A successful sign-in returns to the game. Supabase can link a Google identity to an existing account with the same verified email. See the [Supabase Google sign-in guide](https://supabase.com/docs/guides/auth/social-sign-in/auth-google).
+
 ---
 
 ## Environment variables
