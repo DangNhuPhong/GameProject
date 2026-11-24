@@ -4,6 +4,7 @@ import ovenReady from "../assets/audio/oven-ready.wav";
 import success from "../assets/audio/success.wav";
 import error from "../assets/audio/error.wav";
 import warning from "../assets/audio/warning.wav";
+import orderWarning from "../assets/audio/order-warning.wav";
 import tick from "../assets/audio/tick.wav";
 import timeUp from "../assets/audio/time-up.wav";
 import place from "../assets/audio/place.wav";
@@ -11,7 +12,7 @@ import step1 from "../assets/audio/step-1.wav";
 import step2 from "../assets/audio/step-2.wav";
 import backgroundMusic from "../assets/audio/bg.mp3";
 
-const CLIPS = { chop, frying, ovenReady, success, error, warning, tick, timeUp, place, step1, step2 };
+const CLIPS = { chop, frying, ovenReady, success, error, warning, orderWarning, tick, timeUp, place, step1, step2 };
 const VOLUME_KEY = "kitchen-effects-volume";
 const MUSIC_VOLUME_KEY = "kitchen-music-volume";
 export function readMusicVolume() {
@@ -48,6 +49,7 @@ export default class GameAudio {
     this.volume = readEffectsVolume();
     this.musicVolume = readMusicVolume();
     this.music = null;
+    this.orderWarning = null;
     this.loops = new Map();
     this.oneshots = new Set();
     this.cooldowns = new Map();
@@ -57,9 +59,18 @@ export default class GameAudio {
     this.endsAt = null;
     this.finished = false;
     this.lastSecond = null;
-    this.onVolume = (event) => { this.volume = event.detail; };
+    this.onVolume = (event) => {
+      this.volume = event.detail;
+      if (!this.volume) this.stopOrderWarning();
+    };
     this.onMusicVolume = (event) => { this.musicVolume = event.detail; this.updateMusic(); };
-    this.onVisibility = () => { if (document.hidden) this.stopLoops(); this.updateMusic(); };
+    this.onVisibility = () => {
+      if (document.hidden) {
+        this.stopLoops();
+        this.stopOrderWarning();
+      }
+      this.updateMusic();
+    };
     window.addEventListener("kitchen-audio-volume", this.onVolume);
     window.addEventListener("kitchen-music-volume", this.onMusicVolume);
     document.addEventListener("visibilitychange", this.onVisibility);
@@ -91,6 +102,7 @@ export default class GameAudio {
     if (this.finished) return;
     this.play("timeUp", 0.6);
     this.finished = true;
+    this.stopOrderWarning();
     this.stopLoops();
     this.updateMusic();
   }
@@ -125,6 +137,26 @@ export default class GameAudio {
     const players = this.scene.players || [];
     const distance = Math.min(...players.map((p) => Math.hypot(p.body.x - x, p.body.y - y)));
     return Math.max(0, 1 - distance / 220);
+  }
+
+  syncOrderWarning(urgency) {
+    if (urgency === null || this.finished || document.hidden ||
+        this.scene.controls?.menuOpen || !this.volume || this.scene.sound.locked) {
+      this.stopOrderWarning();
+      return;
+    }
+
+    if (!this.orderWarning) {
+      this.orderWarning = this.scene.sound.add("sfx-orderWarning", { loop: true });
+      this.orderWarning.play();
+    }
+    this.orderWarning.setVolume((0.45 + urgency * 0.4) * this.volume);
+    this.orderWarning.setRate(1 + urgency * 0.75);
+  }
+
+  stopOrderWarning() {
+    this.orderWarning?.destroy();
+    this.orderWarning = null;
   }
 
   step(id, x, y, moving) {
@@ -203,6 +235,7 @@ export default class GameAudio {
   destroy() {
     this.music?.destroy();
     this.music = null;
+    this.stopOrderWarning();
     this.stopLoops();
     this.oneshots.forEach((sound) => sound.destroy());
     this.oneshots.clear();

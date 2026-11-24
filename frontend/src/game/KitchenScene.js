@@ -14,6 +14,8 @@ import cookedPizzaUrl from "../assets/pizza-cooked-pixel.png";
 import { CHARACTERS, getCharacter, registerCustomCharacter } from "./characters";
 import { createGameControls } from "./gameControls";
 
+const ORDER_WARNING_MS = 15_000;
+
 // =====================================
 // CHẾ ĐỘ CHƠI
 //
@@ -319,6 +321,8 @@ export function createKitchenScene({
       this.stations = {};
 
       this.ordersOwner = null;
+      this.currentOrders = [];
+      this.ordersReceivedAt = 0;
 
       this.score = 0;
 
@@ -440,6 +444,17 @@ export function createKitchenScene({
       if (cfg.id === "kitchen") this.createKitchenShelfIcons();
       this.audioEffects = new GameAudio(this);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.audioEffects.destroy());
+      if (mode !== "tutorial") {
+        const warning = document.createElement("div");
+        warning.className = "gm-order-warning";
+        warning.hidden = true;
+        const label = document.createElement("span");
+        warning.append(label);
+        this.game.canvas.closest(".game-page").append(warning);
+        this.orderWarning = warning;
+        this.orderWarningLabel = label;
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => warning.remove());
+      }
 
       this.stationDefs = this.layout.stations
         .filter((s) => STATION_BEHAVIORS[s.kind])
@@ -584,6 +599,7 @@ export function createKitchenScene({
 
       on("game-state", (state) => {
         this.audioEffects.syncRound(state);
+        if (Array.isArray(state.orders)) this.updateOrdersSnapshot(state.orders);
         if (typeof onClockSync === "function") onClockSync(state.roundEndsAt);
         if (
           state.roundStatus === "FINISHED" &&
@@ -653,18 +669,14 @@ export function createKitchenScene({
       // Danh sách đơn thay đổi (đơn mới / hết hạn / hoàn thành): chỉ cập nhật dữ liệu,
       // nếu bảng đang mở thì vẽ lại. KHÔNG tự bật bảng lên.
       on("orders-updated", ({ orders, score }) => {
-        this.currentOrders = orders || [];
-        this.ordersReceivedAt = Date.now();
+        this.updateOrdersSnapshot(orders);
 
         if (typeof score === "number") this.setScore(score);
-        if (this.ordersEl) this.renderOrders();
       });
 
       // Trả lời riêng cho người bấm E ở order station → mở bảng
       on("orders-list", ({ orders }) => {
-        this.currentOrders = orders || [];
-        this.ordersReceivedAt = Date.now();
-        this.openOrders();
+        this.showOrders(orders);
       });
 
       // Vật phẩm bị xoá (vứt thùng rác / phục vụ xong) → hết bị "dính tay"
@@ -744,6 +756,7 @@ export function createKitchenScene({
       });
 
       on("disconnect", () => {
+        this.updateOrdersSnapshot();
         this.players.forEach((p) => {
           p.heldItemId = null;
         });
@@ -1390,9 +1403,46 @@ export function createKitchenScene({
     // BẢNG ĐƠN HÀNG (HTML đặt đè giữa màn hình)
     // =====================================
 
-    showOrders(orders = []) {
+    updateOrdersSnapshot(orders = []) {
       this.currentOrders = orders;
       this.ordersReceivedAt = Date.now();
+      if (this.ordersEl) this.renderOrders();
+    }
+
+    updateOrderWarning() {
+      if (!this.orderWarning) return;
+
+      let nearestOrder = null;
+      let nearestMs = ORDER_WARNING_MS;
+      if (this.net.connected && !this.controls.menuOpen && !this.audioEffects.finished && !document.hidden) {
+        const elapsed = Date.now() - this.ordersReceivedAt;
+        for (const order of this.currentOrders) {
+          const remaining = order.remainingMs - elapsed;
+          if (remaining > 0 && remaining <= nearestMs) {
+            nearestOrder = order;
+            nearestMs = remaining;
+          }
+        }
+      }
+
+      this.orderWarning.hidden = !nearestOrder;
+      if (!nearestOrder) {
+        this.audioEffects.syncOrderWarning(null);
+        return;
+      }
+
+      const urgency = 1 - nearestMs / ORDER_WARNING_MS;
+      const label = `${nearestOrder.name || nearestOrder.recipeId} expiring · ${Math.ceil(nearestMs / 1000)}s`;
+      if (this.orderWarningLabel.textContent !== label) this.orderWarningLabel.textContent = label;
+      const opacity = (0.48 + urgency * 0.44).toFixed(2);
+      if (this.orderWarning.style.getPropertyValue("--warning-opacity") !== opacity) {
+        this.orderWarning.style.setProperty("--warning-opacity", opacity);
+      }
+      this.audioEffects.syncOrderWarning(urgency);
+    }
+
+    showOrders(orders) {
+      this.updateOrdersSnapshot(orders);
       this.openOrders();
     }
 
@@ -1469,6 +1519,7 @@ export function createKitchenScene({
 
       orders.forEach((order, i) => {
         const remaining = Math.max(0, (order.remainingMs ?? 0) - elapsed);
+        const urgent = mode !== "tutorial" && remaining <= ORDER_WARNING_MS;
         const seconds = Math.ceil(remaining / 1000);
         const mmss = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
         const ratio = mode === "tutorial" ? 1 : order.durationMs
@@ -1488,7 +1539,7 @@ export function createKitchenScene({
 
         const time = document.createElement("span");
         time.textContent = mode === "tutorial" ? "No time limit" : mmss;
-        time.style.color = remaining < 15000 ? "#ff6666" : "#9be7a5";
+        time.style.color = urgent ? "#ff6666" : "#9be7a5";
 
         line.append(name, time);
 
@@ -1501,7 +1552,7 @@ export function createKitchenScene({
           "height:5px;border-radius:3px;background:#3b4150;overflow:hidden;";
 
         const fillBar = document.createElement("div");
-        fillBar.style.cssText = `height:100%;width:${ratio * 100}%;background:${remaining < 15000 ? "#ef4444" : "#22c55e"};`;
+        fillBar.style.cssText = `height:100%;width:${ratio * 100}%;background:${urgent ? "#ef4444" : "#22c55e"};`;
 
         bar.appendChild(fillBar);
         row.append(line, hint, bar);
@@ -2229,6 +2280,7 @@ export function createKitchenScene({
       this.updateCameraTarget();
       this.updateOtherPlayers();
       this.audioEffects.update();
+      this.updateOrderWarning();
 
       // Bảng order: đóng khi người đã mở nó đi xa
       if (this.ordersEl) {
